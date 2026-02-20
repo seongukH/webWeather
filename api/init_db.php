@@ -1,6 +1,6 @@
 <?php
 /**
- * DB 초기화 스크립트
+ * DB 초기화 스크립트 (MariaDB)
  * 브라우저에서 한 번만 실행: /api/init_db.php
  */
 
@@ -26,9 +26,25 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ');
 
+    // 기본 API 키 삽입
+    $defaults = [
+        'vworldKey' => '43115ED3-2B2D-33B5-A2F6-0AA60BD281F7',
+        'ncpmsKey'  => '202660399d8c3791ec92be04d81d852ddf58',
+    ];
+
+    $stmt = $pdo->prepare('
+        INSERT INTO settings (setting_key, setting_value)
+        VALUES (:key, :value)
+        ON DUPLICATE KEY UPDATE setting_value = :value2, updated_at = CURRENT_TIMESTAMP
+    ');
+
+    foreach ($defaults as $key => $value) {
+        $stmt->execute([':key' => $key, ':value' => $value, ':value2' => $value]);
+    }
+
     echo json_encode([
         'success' => true,
-        'message' => 'DB 초기화 완료: webweather.settings 테이블 생성됨'
+        'message' => 'DB 초기화 완료: settings 테이블 생성 + API 키 저장됨'
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
