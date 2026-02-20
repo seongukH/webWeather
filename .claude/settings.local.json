@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:ncpms.rda.go.kr)",
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:power.larc.nasa.gov)",
+      "Bash(where:*)",
+      "Bash(cmd.exe /c \"where httpd 2>nul & echo --- & dir C:\\\\Apache24 /b 2>nul & echo --- & dir \"\"C:\\\\Program Files\\\\Apache Software Foundation\"\" /b 2>nul & echo --- & dir \"\"C:\\\\Program Files \\(x86\\)\\\\Apache Software Foundation\"\" /b 2>nul & echo ---\")",
+      "Bash(cmd.exe /c \"dir C:\\\\xampp\\\\apache /b 2>nul & echo --- & dir C:\\\\wamp\\\\bin\\\\apache /b 2>nul & echo --- & dir C:\\\\wamp64\\\\bin\\\\apache /b 2>nul & echo ---\")",
+      "Bash(ipconfig:*)",
+      "Bash(findstr:*)",
+      "WebFetch(domain:172-17-3-206.devmobilitylab.direct.quickconnect.to)",
+      "Bash(curl:*)",
+      "WebFetch(domain:www.vworld.kr)",
+      "Bash(python3:*)"
+    ]
+  }
+}

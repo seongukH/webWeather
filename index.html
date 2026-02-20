@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="농작물 병해충 분포 및 예측 지도 시스템 - VWorld 지도 기반 실시간 병해충 모니터링">
+    <title>농작물 병해충 예측지도 | Crop Pest Prediction Map</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <!-- OpenLayers -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- App CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- ===== Header ===== -->
+        <header id="header">
+            <div class="header-left">
+                <div class="header-logo">🌾</div>
+                <div>
+                    <div class="header-title">농작물 병해충 예측지도</div>
+                    <div class="header-subtitle">Crop Pest & Disease Prediction Map</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="header-date" id="header-date"></div>
+                <button class="settings-btn" id="settings-btn" onclick="settingsModal.open()" title="설정">
+                    <span class="material-icons">settings</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ===== Main Content ===== -->
+        <div id="main-content">
+
+            <!-- ===== Left Sidebar ===== -->
+            <aside id="sidebar">
+                <!-- 작물 선택 -->
+                <div class="sidebar-section">
+                    <div class="section-title">
+                        <span class="material-icons">eco</span>
+                        작물 선택
+                    </div>
+                    <div class="crop-grid" id="crop-grid"></div>
+                </div>
+
+                <!-- 병해충 목록 -->
+                <div class="sidebar-section">
+                    <div class="section-title">
+                        <span class="material-icons">bug_report</span>
+                        병해충 목록
+                    </div>
+                    <div class="pest-list" id="pest-list"></div>
+                </div>
+
+                <!-- 필터 -->
+                <div class="sidebar-section">
+                    <div class="section-title">
+                        <span class="material-icons">filter_alt</span>
+                        필터
+                    </div>
+
+                    <div class="filter-group">
+                        <div class="filter-label">시/도 선택</div>
+                        <select class="filter-select" id="province-select"></select>
+                    </div>
+
+                    <div class="filter-group">
+                        <div class="filter-label">예측 날짜</div>
+                        <div class="date-input-wrapper">
+                            <input type="date" id="date-input">
+                            <span class="material-icons">calendar_today</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NCPMS API 상태 -->
+                <div class="sidebar-section">
+                    <div class="section-title">
+                        <span class="material-icons">cloud</span>
+                        NCPMS API
+                    </div>
+                    <div id="ncpms-api-status" style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+                        <div class="status-indicator" style="margin-bottom: 6px;">
+                            <span class="status-dot" id="api-status-dot"></span>
+                            <span id="api-status-text">API 연결 대기중</span>
+                        </div>
+                        <button class="ncpms-map-btn" id="ncpms-map-btn" onclick="ncpmsWidget.toggle()">
+                            <span class="material-icons" style="font-size:16px;vertical-align:middle;">map</span>
+                            NCPMS 예측지도
+                        </button>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+                            <a href="https://ncpms.rda.go.kr/npms/openApiTmp.np" target="_blank"
+                                style="color:var(--accent-primary);">API Key 발급 →</a>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- ===== Map ===== -->
+            <div id="map-container">
+                <!-- 지도 -->
+                <div id="map"></div>
+
+                <!-- 배경지도 전환 -->
+                <div class="map-layer-toggle">
+                    <button class="layer-btn active" data-layer="base">기본</button>
+                    <button class="layer-btn" data-layer="satellite">위성</button>
+                    <button class="layer-btn" data-layer="hybrid">하이브리드</button>
+                    <span style="width:1px;height:20px;background:var(--border-color);margin:0 2px;"></span>
+                    <button class="nofly-btn" id="nofly-toggle" onclick="mapManager.toggleNoFlyZone() ? this.classList.add('active') : this.classList.remove('active')">
+                        <span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:2px;">flight</span>금지구역
+                    </button>
+                </div>
+
+                <!-- 범례 -->
+                <div class="map-legend" id="map-legend"></div>
+
+                <!-- 팝업 -->
+                <div id="map-popup" class="map-popup" style="display:none;"></div>
+
+                <!-- NCPMS 예측지도 오버레이 -->
+                <div id="ncpms-overlay" class="ncpms-overlay" style="display:none;">
+                    <div class="ncpms-overlay-header">
+                        <span class="material-icons" style="font-size:18px;">pest_control</span>
+                        <span>NCPMS 병해충 예측지도</span>
+                        <div style="flex:1;"></div>
+                        <select id="ncpms-crop-select" class="ncpms-crop-select">
+                            <option value="">작물 선택...</option>
+                        </select>
+                        <button class="ncpms-close-btn" onclick="ncpmsWidget.close()">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                    <div id="ncpms-map-content" class="ncpms-map-content">
+                        <div class="ncpms-placeholder" id="ncpms-placeholder">
+                            <span class="material-icons" style="font-size:48px;color:var(--text-muted);">map</span>
+                            <p>작물을 선택하면 NCPMS 예측지도가 표시됩니다.</p>
+                            <p class="ncpms-php-notice" id="ncpms-php-notice" style="display:none;">
+                                <span class="material-icons" style="font-size:14px;vertical-align:middle;color:var(--risk-caution);">warning</span>
+                                PHP가 활성화되지 않았습니다. Web Station에서 PHP 프로필을 설정해주세요.
+                            </p>
+                        </div>
+                        <div id="ncpms-map" style="width:100%;height:100%;"></div>
+                    </div>
+                </div>
+
+                <!-- 로딩 오버레이 -->
+                <div id="loading-overlay" class="loading-overlay">
+                    <div class="loading-content">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">지도를 불러오는 중...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== Right Info Panel ===== -->
+            <aside id="info-panel">
+                <!-- 탭 -->
+                <div class="panel-tabs">
+                    <button class="panel-tab active" data-tab="search">
+                        <span class="material-icons">search</span> 주소검색
+                    </button>
+                    <button class="panel-tab" data-tab="chart">
+                        <span class="material-icons">show_chart</span> 그래프
+                    </button>
+                    <button class="panel-tab" data-tab="desc">
+                        <span class="material-icons">description</span> 설명
+                    </button>
+                </div>
+
+                <!-- 탭 컨텐츠 -->
+                <div class="panel-content">
+                    <!-- 주소검색 탭 -->
+                    <div class="tab-pane active" id="tab-search">
+                        <div class="search-box">
+                            <span class="material-icons search-icon">search</span>
+                            <input type="text" class="search-input" id="search-input" placeholder="주소 또는 지역명 검색...">
+                            <button class="search-btn" id="search-btn">검색</button>
+                        </div>
+
+                        <!-- 지역 정보 -->
+                        <div id="region-info"></div>
+
+                        <!-- 검색 결과 -->
+                        <div class="search-results" id="search-results"></div>
+                    </div>
+
+                    <!-- 그래프 탭 -->
+                    <div class="tab-pane" id="tab-chart">
+                        <div class="chart-title">
+                            <span class="material-icons">timeline</span>
+                            위험도 예측 추이
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="prediction-chart"></canvas>
+                        </div>
+
+                        <div class="chart-title" style="margin-top:12px;">
+                            <span class="material-icons">thermostat</span>
+                            기상 데이터
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="weather-chart"></canvas>
+                        </div>
+
+                        <div class="chart-title" style="margin-top:12px;">
+                            <span class="material-icons">wb_sunny</span>
+                            일사량 / 강수량
+                            <span class="chart-source-tag">NASA POWER</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="solar-precip-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- 설명 탭 -->
+                    <div class="tab-pane" id="tab-desc">
+                        <div id="description-content">
+                            <div class="empty-state">
+                                <span class="material-icons">info</span>
+                                <p>병해충을 선택하면<br>상세 설명이 표시됩니다.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+
+        <!-- ===== Status Bar ===== -->
+        <div class="status-bar">
+            <div class="status-left">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span>VWorld 연결됨</span>
+                </div>
+                <span>|</span>
+                <span id="status-coords">36.00000, 127.50000</span>
+            </div>
+            <div class="status-right">
+                <span>OpenLayers 9.x</span>
+                <span>|</span>
+                <span>NCPMS API</span>
+                <span>|</span>
+                <span>© 2025</span>
+            </div>
+        </div>
+
+        <!-- ===== Settings Modal ===== -->
+        <div class="modal-overlay" id="settings-modal" style="display:none;">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <h2><span class="material-icons">settings</span> 설정</h2>
+                    <button class="modal-close" onclick="settingsModal.close()"><span
+                            class="material-icons">close</span></button>
+                </div>
+                <div class="modal-body">
+                    <!-- VWorld API -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">
+                            <span class="material-icons">map</span> VWorld API
+                        </div>
+                        <div class="settings-field">
+                            <label for="setting-vworld-key">API Key</label>
+                            <div class="settings-input-wrapper">
+                                <input type="text" id="setting-vworld-key" placeholder="VWorld API Key 입력...">
+                                <button class="settings-eye-btn"
+                                    onclick="settingsModal.toggleVisibility('setting-vworld-key')">
+                                    <span class="material-icons">visibility_off</span>
+                                </button>
+                            </div>
+                            <div class="settings-help">
+                                <a href="https://www.vworld.kr/dev/v4dv_2dguide2_s001.do" target="_blank">VWorld API Key
+                                    발급 →</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NCPMS API -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">
+                            <span class="material-icons">cloud</span> NCPMS 병해충예측 API
+                        </div>
+                        <div class="settings-field">
+                            <label for="setting-ncpms-key">API Key</label>
+                            <div class="settings-input-wrapper">
+                                <input type="text" id="setting-ncpms-key" placeholder="NCPMS API Key 입력...">
+                                <button class="settings-eye-btn"
+                                    onclick="settingsModal.toggleVisibility('setting-ncpms-key')">
+                                    <span class="material-icons">visibility_off</span>
+                                </button>
+                            </div>
+                            <div class="settings-help">
+                                <a href="https://ncpms.rda.go.kr/npms/openApiTmp.np" target="_blank">NCPMS API Key 발급
+                                    →</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API 상태 표시 -->
+                    <div class="settings-status" id="settings-status"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn secondary" onclick="settingsModal.close()">취소</button>
+                    <button class="modal-btn primary" onclick="settingsModal.save()">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Scripts (load order matters) -->
+    <script src="js/data.js"></script>
+    <script src="js/ncpms-api.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/sidebar.js"></script>
+    <script src="js/panel.js"></script>
+    <script src="js/legend.js"></script>
+    <script src="js/ncpms-widget.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
