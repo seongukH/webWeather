@@ -140,40 +140,58 @@ class NcpmsApi {
         }
     }
 
-    // ─── 병해충 예측 데이터 생성 ────────────────
-    // SVC31은 위젯 임베딩 API (proxyUrl, div_id 등 필수)이므로
-    // REST 데이터 조회가 불가능. NASA POWER 기상데이터 기반 자체 계산 사용.
-    // NCPMS 공식 예측지도는 ncpms-widget.js의 위젯 임베딩으로 제공.
+    // ─── 병해충 예측지도 데이터 조회 (SVC31) ────
     async fetchPrediction(cropCode, pestCode, date) {
-        const diseaseInfo = this.diseaseCodeMap[pestCode];
-        console.log(`[NCPMS] 기상 기반 위험도 계산: ${cropCode}, ${diseaseInfo?.name || pestCode}, ${date || 'today'}`);
-        return this.generateFallbackData(cropCode, pestCode, date);
-    }
+        if (!this.apiKey) {
+            console.log('[NCPMS API] API Key 미설정 → 시뮬레이션 데이터');
+            return this.generateFallbackData(cropCode, pestCode, date);
+        }
 
-    // ─── NAS PHP 프록시 경유 fetch ─────────────
-    async _fetchViaPhpProxy(params) {
-        const proxyUrl = `api/proxy_ncpms.php?${params.toString()}`;
-        console.log(`[NCPMS API] PHP 프록시 시도: ${proxyUrl}`);
-        const response = await fetch(proxyUrl);
-        const text = await response.text();
-        // PHP 미실행 시 raw source 반환 감지
-        if (text.trimStart().startsWith('<?php')) {
-            throw new Error('PHP 미실행 (raw source 반환)');
+        // 내부 코드 → NCPMS 코드 변환
+        const diseaseInfo = this.diseaseCodeMap[pestCode];
+        const ncpmsDiseaseCode = diseaseInfo ? diseaseInfo.code : pestCode;
+        const displayDate = date ? date.replace(/-/g, '') : this.getTodayString();
+
+        const params = new URLSearchParams({
+            apiKey: this.apiKey,
+            serviceCode: 'SVC31',
+            cropCode: cropCode,
+            diseaseWeedCode: ncpmsDiseaseCode,
+            displayDate: displayDate
+        });
+
+        const requestUrl = `${this.baseUrl}?${params.toString()}`;
+        console.log(`[NCPMS API] 요청 URL: ${requestUrl}`);
+        console.log(`[NCPMS API] 작물: ${cropCode}, 병해충: ${ncpmsDiseaseCode} (${diseaseInfo?.name || pestCode}), 날짜: ${displayDate}`);
+
+        // 직접 요청 시도 → CORS 프록시 순차 시도
+        const attempts = [
+            () => this._fetchDirect(requestUrl),
+            ...this.corsProxies.map((proxy, i) => () => this._fetchViaProxy(requestUrl, proxy, i))
+        ];
+
+        for (const attempt of attempts) {
+            try {
+                const data = await attempt();
+                if (data) {
+                    this.lastResponse = data;
+                    this.updateStatus(true);
+                    const predictions = this.transformResponse(data);
+                    if (predictions && Object.keys(predictions).length > 0) {
+                        console.log(`[NCPMS API] ${Object.keys(predictions).length}개 시/도 예측 데이터 수신`);
+                        return predictions;
+                    }
+                }
+            } catch (err) {
+                // 다음 시도로 넘어감
+                console.warn('[NCPMS API] 요청 방식 실패, 다음 시도...', err.message);
+            }
         }
-        this.lastRawResponse = text;
-        if (!text || text.trim().length === 0) {
-            throw new Error('빈 응답');
-        }
-        // XML 응답 파싱
-        if (text.trim().startsWith('<?xml') || text.trim().startsWith('<')) {
-            console.log('[NCPMS API] PHP 프록시 성공 (XML 응답)');
-            return this.parseXmlResponse(text);
-        }
-        try {
-            return JSON.parse(text);
-        } catch {
-            throw new Error('PHP 프록시 응답 파싱 실패');
-        }
+
+        // 모든 시도 실패 → 폴백 데이터
+        console.log('[NCPMS API] 모든 요청 실패 → 시뮬레이션 데이터 사용');
+        this.updateStatus(false);
+        return this.generateFallbackData(cropCode, pestCode, date);
     }
 
     // ─── 직접 fetch (Same-Origin 또는 CORS 허용 시) ─
@@ -423,25 +441,60 @@ class NcpmsApi {
         return predictions;
     }
 
-    // ─── 월별 시계열 데이터 생성 (기상 기반 계산) ─────
-    // SVC31은 위젯 API이므로 REST 데이터 조회 불가 → 자체 계산
+    // ─── 월별 시계열 데이터 수집 (12개월 병렬) ─────
     async fetchMonthlyTimeSeries(cropCode, pestCode, year, provinceCode) {
-        const results = [];
-        for (let m = 1; m <= 12; m++) {
-            const dateStr = `${year}-${String(m).padStart(2, '0')}-15`;
-            const predictions = this.generateFallbackData(cropCode, pestCode, dateStr);
-            if (predictions && predictions[provinceCode]) {
-                results.push({
-                    date: dateStr,
-                    month: m,
-                    ...predictions[provinceCode]
-                });
-            } else {
-                results.push(null);
+        if (!this.apiKey) return null;
+
+        const diseaseInfo = this.diseaseCodeMap[pestCode];
+        const ncpmsDiseaseCode = diseaseInfo ? diseaseInfo.code : pestCode;
+        const results = new Array(12).fill(null);
+
+        const fetchMonth = async (m) => {
+            const displayDate = `${year}${String(m).padStart(2, '0')}15`;
+            const params = new URLSearchParams({
+                apiKey: this.apiKey,
+                serviceCode: 'SVC31',
+                cropCode: cropCode,
+                diseaseWeedCode: ncpmsDiseaseCode,
+                displayDate: displayDate
+            });
+            const url = `${this.baseUrl}?${params.toString()}`;
+
+            // 빠른 단일 시도 (프록시 1개만, 타임아웃 8초)
+            try {
+                const proxyUrl = this.corsProxies[0] + encodeURIComponent(url);
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 8000);
+                const resp = await fetch(proxyUrl, { signal: controller.signal });
+                clearTimeout(timeout);
+
+                const data = await this._parseResponse(resp);
+                if (data) {
+                    const predictions = this.transformResponse(data);
+                    if (predictions && predictions[provinceCode]) {
+                        results[m - 1] = {
+                            date: `${year}-${String(m).padStart(2, '0')}-15`,
+                            month: m,
+                            ...predictions[provinceCode]
+                        };
+                    }
+                }
+            } catch {
+                // 실패 시 null 유지
             }
+        };
+
+        // 3개씩 병렬 처리 (프록시 부하 분산)
+        for (let i = 0; i < 12; i += 3) {
+            await Promise.allSettled([
+                fetchMonth(i + 1),
+                fetchMonth(Math.min(i + 2, 12)),
+                fetchMonth(Math.min(i + 3, 12))
+            ]);
         }
+
         const successCount = results.filter(r => r !== null).length;
-        console.log(`[NCPMS] 월별 시계열 (기상 기반): ${successCount}/12개월 생성`);
+        console.log(`[NCPMS API] 월별 시계열: ${successCount}/12개월 수신`);
         return successCount > 0 ? results : null;
     }
 
