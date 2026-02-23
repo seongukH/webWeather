@@ -1800,6 +1800,29 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     transform: scale(1);
 }
 
+.ncpms-tab {
+    padding: 5px 12px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ncpms-tab:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.ncpms-tab.active {
+    background: rgba(0, 188, 212, 0.15);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
 .ncpms-overlay-header {
     display: flex;
     align-items: center;
