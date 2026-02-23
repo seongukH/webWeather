@@ -133,11 +133,12 @@
                 <!-- 팝업 -->
                 <div id="map-popup" class="map-popup" style="display:none;"></div>
 
-                <!-- NCPMS 예측지도 오버레이 -->
+                <!-- NCPMS 오버레이 -->
                 <div id="ncpms-overlay" class="ncpms-overlay" style="display:none;">
                     <div class="ncpms-overlay-header">
                         <span class="material-icons" style="font-size:18px;">pest_control</span>
-                        <span>NCPMS 병해충 예측지도</span>
+                        <button class="ncpms-tab active" data-svc="SVC31" onclick="ncpmsWidget.switchTab('SVC31')">예측지도</button>
+                        <button class="ncpms-tab" data-svc="SVC33" onclick="ncpmsWidget.switchTab('SVC33')">예측조사비교</button>
                         <div style="flex:1;"></div>
                         <select id="ncpms-crop-select" class="ncpms-crop-select">
                             <option value="">작물 선택...</option>
@@ -149,7 +150,7 @@
                     <div id="ncpms-map-content" class="ncpms-map-content">
                         <div class="ncpms-placeholder" id="ncpms-placeholder">
                             <span class="material-icons" style="font-size:48px;color:var(--text-muted);">map</span>
-                            <p>작물을 선택하면 NCPMS 예측지도가 표시됩니다.</p>
+                            <p id="ncpms-placeholder-text">작물을 선택하면 NCPMS 예측지도가 표시됩니다.</p>
                             <p class="ncpms-php-notice" id="ncpms-php-notice" style="display:none;">
                                 <span class="material-icons" style="font-size:14px;vertical-align:middle;color:var(--risk-caution);">warning</span>
                                 PHP가 활성화되지 않았습니다. Web Station에서 PHP 프로필을 설정해주세요.
