@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS settings (
+  id SERIAL PRIMARY KEY,
+  setting_key VARCHAR(100) UNIQUE NOT NULL,
+  setting_value TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
