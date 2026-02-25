@@ -125,6 +125,9 @@
                     <button class="nofly-btn" id="nofly-toggle" onclick="mapManager.toggleNoFlyZone() ? this.classList.add('active') : this.classList.remove('active')">
                         <span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:2px;">flight</span>금지구역
                     </button>
+                    <button class="ndvi-btn" id="ndvi-toggle" onclick="mapManager.toggleNDVI()">
+                        <span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:2px;">satellite_alt</span>NDVI
+                    </button>
                 </div>
 
                 <!-- 범례 -->
@@ -237,6 +240,7 @@
                                 <p>병해충을 선택하면<br>상세 설명이 표시됩니다.</p>
                             </div>
                         </div>
+                        <div id="json-data-section"></div>
                     </div>
                 </div>
             </aside>
@@ -309,6 +313,26 @@
                             <div class="settings-help">
                                 <a href="https://ncpms.rda.go.kr/npms/openApiTmp.np" target="_blank">NCPMS API Key 발급
                                     →</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Agromonitoring API -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">
+                            <span class="material-icons">satellite_alt</span> Agromonitoring (NDVI 위성)
+                        </div>
+                        <div class="settings-field">
+                            <label for="setting-agro-key">API Key</label>
+                            <div class="settings-input-wrapper">
+                                <input type="text" id="setting-agro-key" placeholder="Agromonitoring API Key 입력...">
+                                <button class="settings-eye-btn"
+                                    onclick="settingsModal.toggleVisibility('setting-agro-key')">
+                                    <span class="material-icons">visibility_off</span>
+                                </button>
+                            </div>
+                            <div class="settings-help">
+                                <a href="https://agromonitoring.com/dashboard#api-keys" target="_blank">Agromonitoring API Key 발급 →</a>
                             </div>
                         </div>
                     </div>

@@ -71,6 +71,11 @@ class MapManager {
         this.noFlyLayer = null;        // 드론 비행금지구역 레이어
         this.noFlyVisible = false;     // 비행금지구역 표시 여부
         this.noFlyLoaded = false;      // 데이터 로드 완료 여부
+        this.ndviLayer = null;         // NDVI 위성 타일 레이어
+        this.ndviBoundaryLayer = null; // NDVI 폴리곤 경계 레이어
+        this.ndviVisible = false;      // NDVI 표시 여부
+        this.ndviPolygonId = null;     // Agromonitoring 폴리곤 ID
+        this.agroApiKey = '';          // Agromonitoring API Key
         this.popupOverlay = null;
         this.currentLayerType = 'base';
         this.predictionData = {};
@@ -136,6 +141,21 @@ class MapManager {
             style: (feature) => this.getRegionStyle(feature)
         });
 
+        // NDVI 위성 타일 레이어
+        this.ndviLayer = new ol.layer.Tile({
+            source: new ol.source.XYZ({ url: '' }),
+            zIndex: 3,
+            visible: false,
+            opacity: 0.85
+        });
+
+        // NDVI 폴리곤 경계 레이어
+        this.ndviBoundaryLayer = new ol.layer.Vector({
+            source: new ol.source.Vector(),
+            zIndex: 12,
+            visible: false
+        });
+
         // 드론 비행금지구역 레이어
         this.noFlyLayer = new ol.layer.Vector({
             source: new ol.source.Vector(),
@@ -167,8 +187,10 @@ class MapManager {
                 this.baseLayer,
                 this.satelliteLayer,
                 this.hybridLayer,
+                this.ndviLayer,
                 this.heatmapLayer,
                 this.regionLayer,
+                this.ndviBoundaryLayer,
                 this.noFlyLayer,
                 this.markerLayer
             ],
@@ -492,6 +514,10 @@ class MapManager {
                     <span class="popup-info-value">${data.humidity}%</span>
                 </div>
             </div>
+            <button class="popup-json-btn" onclick="infoPanel.showJsonData()">
+                <span class="material-icons" style="font-size:14px;vertical-align:middle;">data_object</span>
+                전체 데이터 (JSON)
+            </button>
         `;
         popupEl.style.display = 'block';
         this.popupOverlay.setPosition(coordinate);
@@ -501,6 +527,32 @@ class MapManager {
     closePopup() {
         document.getElementById('map-popup').style.display = 'none';
         this.popupOverlay.setPosition(undefined);
+    }
+
+    // 팝업 갱신 (예측 데이터 변경 시 - 날짜/작물/병해충 변경)
+    refreshPopup() {
+        if (!this.selectedCoord || !this.popupOverlay.getPosition()) return;
+
+        const lon = this.selectedCoord[0];
+        const lat = this.selectedCoord[1];
+        const pointData = this.queryPointData(lon, lat);
+
+        if (pointData) {
+            const province = pointData.province;
+            const displayName = province
+                ? `${province.name} (${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E)`
+                : `${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E`;
+
+            this.showPopup(this.popupOverlay.getPosition(), {
+                code: province ? province.code : '',
+                name: displayName,
+                riskLevel: pointData.riskLevel,
+                riskValue: pointData.riskValue,
+                probability: pointData.probability,
+                temperature: pointData.temperature,
+                humidity: pointData.humidity
+            });
+        }
     }
 
     // 좌표로 이동
@@ -702,7 +754,578 @@ class MapManager {
         popupEl.style.display = 'block';
         this.popupOverlay.setPosition(coordinate);
     }
+    // ── NDVI 위성 지도 ──────────────────────────
+
+    // NDVI 토글
+    async toggleNDVI() {
+        const btn = document.getElementById('ndvi-toggle');
+
+        if (!this.agroApiKey) {
+            // 설정에서 키 확인
+            try {
+                const raw = localStorage.getItem('pestmap_settings');
+                const settings = raw ? JSON.parse(raw) : {};
+                if (settings.agroKey) {
+                    this.agroApiKey = settings.agroKey;
+                }
+            } catch (e) {}
+        }
+
+        if (!this.agroApiKey) {
+            alert('Agromonitoring API Key가 설정되지 않았습니다.\n설정(⚙) 메뉴에서 API Key를 입력해주세요.');
+            return;
+        }
+
+        this.ndviVisible = !this.ndviVisible;
+        this.ndviLayer.setVisible(this.ndviVisible);
+
+        if (btn) {
+            btn.classList.toggle('active', this.ndviVisible);
+        }
+
+        if (this.ndviVisible) {
+            await this.loadNDVI();
+        } else {
+            this._showNDVILegend(false);
+            this._closeNDVIChart();
+            this._removeNDVIPanel();
+            this.ndviBoundaryLayer.getSource().clear();
+            this.ndviBoundaryLayer.setVisible(false);
+        }
+
+        console.log(`[NDVI] ${this.ndviVisible ? 'ON' : 'OFF'}`);
+    }
+
+    // NDVI 데이터 로드 (현재 지도 중심 기준)
+    async loadNDVI() {
+        const btn = document.getElementById('ndvi-toggle');
+        if (btn) btn.classList.add('loading');
+
+        try {
+            // 1) 현재 지도 중심 좌표
+            const center = ol.proj.toLonLat(this.map.getView().getCenter());
+            const lon = center[0];
+            const lat = center[1];
+
+            // 2) 폴리곤 생성 (약 0.025도 ≈ 2.5km 사각형, 약 2500ha 이내)
+            const d = 0.025;
+            const coords = [
+                [lon - d, lat - d],
+                [lon + d, lat - d],
+                [lon + d, lat + d],
+                [lon - d, lat + d],
+                [lon - d, lat - d]
+            ];
+
+            // 기존 폴리곤이 있으면 재사용 시도 (같은 위치)
+            const polyKey = `${lon.toFixed(2)}_${lat.toFixed(2)}`;
+            const cachedPolyId = sessionStorage.getItem(`ndvi_poly_${polyKey}`);
+
+            let polyResult = null;
+            if (cachedPolyId) {
+                polyResult = { id: cachedPolyId, area: null };
+            } else {
+                polyResult = await this._createAgroPolygon(coords);
+                if (polyResult) {
+                    sessionStorage.setItem(`ndvi_poly_${polyKey}`, polyResult.id);
+                }
+            }
+
+            if (!polyResult) {
+                console.error('[NDVI] 폴리곤 생성 실패');
+                this.ndviVisible = false;
+                this.ndviLayer.setVisible(false);
+                if (btn) btn.classList.remove('active', 'loading');
+                return;
+            }
+
+            const polygonId = polyResult.id;
+            this.ndviPolygonId = polygonId;
+
+            // 폴리곤 경계를 지도에 표시
+            this._drawNDVIBoundary(coords, polyResult.area);
+
+            // 3) 위성 이미지 검색 (30일 → 90일 → 1년 → 3년 → 2019년부터 전체)
+            const nowTs = Math.floor(Date.now() / 1000);
+            const since2019 = Math.floor(new Date('2019-01-01').getTime() / 1000);
+            const searchPeriods = [
+                { days: 30, label: '30일' },
+                { days: 90, label: '90일' },
+                { days: 365, label: '1년' },
+                { days: 365 * 3, label: '3년' },
+                { start: since2019, label: '2019년~현재' }
+            ];
+            let tileUrl = null;
+
+            for (const p of searchPeriods) {
+                const start = p.start || (nowTs - (p.days * 24 * 3600));
+                console.log(`[NDVI] ${p.label} 이내 이미지 검색...`);
+                tileUrl = await this._searchNDVIImage(polygonId, start, nowTs);
+                if (tileUrl) break;
+            }
+
+            if (tileUrl) {
+                // 4) 타일 레이어에 URL 적용
+                this.ndviLayer.setSource(new ol.source.XYZ({
+                    url: tileUrl,
+                    crossOrigin: 'anonymous',
+                    maxZoom: 16
+                }));
+                this.ndviLayer.setVisible(true);
+                this._showNDVILegend(true);
+                console.log('[NDVI] 타일 레이어 활성화:', tileUrl);
+            } else {
+                alert('2019년 이후 NDVI 위성 이미지가 없습니다.');
+                this.ndviVisible = false;
+                this.ndviLayer.setVisible(false);
+                if (btn) btn.classList.remove('active');
+            }
+
+            // 5) NDVI 히스토리 그래프 (2019년~현재 전체 기간)
+            this._loadNDVIHistory(polygonId);
+        } catch (err) {
+            console.error('[NDVI] 로드 실패:', err);
+            alert(`NDVI 로드 실패: ${err.message}`);
+            this.ndviVisible = false;
+            this.ndviLayer.setVisible(false);
+            if (btn) btn.classList.remove('active');
+        }
+
+        if (btn) btn.classList.remove('loading');
+    }
+
+    // Agromonitoring 폴리곤 생성 (한도 초과 시 자동 정리)
+    async _createAgroPolygon(coords) {
+        const baseUrl = `http://api.agromonitoring.com/agro/1.0/polygons`;
+        const url = `${baseUrl}?appid=${this.agroApiKey}`;
+        const body = {
+            name: 'NDVI_View',
+            geo_json: {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [coords]
+                }
+            }
+        };
+
+        // 요청 중심 좌표 계산
+        const centerLon = (coords[0][0] + coords[2][0]) / 2;
+        const centerLat = (coords[0][1] + coords[2][1]) / 2;
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            // 409: 중복 폴리곤 또는 413: 개수 한도 초과 → 기존 목록에서 처리
+            if (res.status === 409 || res.status === 413) {
+                console.log(`[NDVI] ${res.status} 오류 → 기존 폴리곤 목록 확인`);
+                return await this._reuseOrRecyclePolygon(coords, centerLon, centerLat);
+            }
+
+            if (!res.ok) {
+                const errText = await res.text();
+                console.error('[NDVI] 폴리곤 생성 오류:', res.status, errText);
+                return null;
+            }
+
+            const data = await res.json();
+            console.log(`[NDVI] 폴리곤 생성 완료: ${data.id} (${data.area?.toFixed(1)}ha)`);
+            return { id: data.id, area: data.area };
+        } catch (err) {
+            console.error('[NDVI] 폴리곤 API 오류:', err);
+            return null;
+        }
+    }
+
+    // 기존 폴리곤 재사용 또는 가장 오래된 것 삭제 후 재생성
+    async _reuseOrRecyclePolygon(coords, centerLon, centerLat) {
+        const baseUrl = `http://api.agromonitoring.com/agro/1.0/polygons`;
+
+        try {
+            // 기존 폴리곤 목록 가져오기
+            const listRes = await fetch(`${baseUrl}?appid=${this.agroApiKey}`);
+            const list = await listRes.json();
+
+            if (!list || list.length === 0) return null;
+
+            // 1) 현재 위치에 가장 가까운 폴리곤 찾기
+            let closest = null;
+            let closestDist = Infinity;
+
+            for (const poly of list) {
+                if (poly.center) {
+                    const dx = poly.center[0] - centerLon;
+                    const dy = poly.center[1] - centerLat;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closest = poly;
+                    }
+                }
+            }
+
+            // 0.03도 이내(~3km) → 기존 폴리곤 재사용
+            if (closest && closestDist < 0.03) {
+                console.log(`[NDVI] 근처 기존 폴리곤 재사용: ${closest.id} (거리: ${(closestDist * 111).toFixed(1)}km)`);
+                return { id: closest.id, area: closest.area };
+            }
+
+            // 2) 가까운 게 없으면 → 가장 오래된 폴리곤 삭제 후 재생성
+            const oldest = list.reduce((a, b) =>
+                (a.created_at || 0) < (b.created_at || 0) ? a : b
+            );
+
+            console.log(`[NDVI] 폴리곤 한도 초과 → 가장 오래된 폴리곤 삭제: ${oldest.id} (${oldest.name})`);
+            const delRes = await fetch(`${baseUrl}/${oldest.id}?appid=${this.agroApiKey}`, {
+                method: 'DELETE'
+            });
+
+            if (!delRes.ok) {
+                console.warn('[NDVI] 폴리곤 삭제 실패:', delRes.status);
+                // 삭제 실패 시 가장 가까운 폴리곤이라도 사용
+                if (closest) {
+                    console.log(`[NDVI] 삭제 실패, 가장 가까운 폴리곤 사용: ${closest.id}`);
+                    return { id: closest.id, area: closest.area };
+                }
+                return null;
+            }
+
+            console.log('[NDVI] 삭제 완료, 새 폴리곤 생성 재시도...');
+
+            // 새 폴리곤 생성 재시도
+            const retryRes = await fetch(`${baseUrl}?appid=${this.agroApiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: 'NDVI_View',
+                    geo_json: {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: { type: 'Polygon', coordinates: [coords] }
+                    }
+                })
+            });
+
+            if (!retryRes.ok) {
+                const errText = await retryRes.text();
+                console.error('[NDVI] 재생성도 실패:', retryRes.status, errText);
+                // 최후의 수단: 아직 남아있는 가장 가까운 폴리곤 사용
+                if (closest && closest.id !== oldest.id) {
+                    return { id: closest.id, area: closest.area };
+                }
+                return null;
+            }
+
+            const data = await retryRes.json();
+            console.log(`[NDVI] 폴리곤 재생성 완료: ${data.id} (${data.area?.toFixed(1)}ha)`);
+            return { id: data.id, area: data.area };
+        } catch (err) {
+            console.error('[NDVI] 폴리곤 재활용 오류:', err);
+            return null;
+        }
+    }
+
+    // NDVI 위성 이미지 검색
+    async _searchNDVIImage(polygonId, start, end) {
+        const url = `http://api.agromonitoring.com/agro/1.0/image/search?start=${start}&end=${end}&polyid=${polygonId}&appid=${this.agroApiKey}`;
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                console.error('[NDVI] 이미지 검색 오류:', res.status);
+                return null;
+            }
+
+            const images = await res.json();
+            if (!images || images.length === 0) {
+                console.warn('[NDVI] 해당 기간에 이미지 없음');
+                return null;
+            }
+
+            // 가장 최신 이미지 (구름 커버리지 낮은 것 우선)
+            const sorted = images
+                .filter(img => img.tile && img.tile.ndvi)
+                .sort((a, b) => {
+                    // 구름 적고, 날짜 최신 순
+                    const cloudDiff = (a.cl || 0) - (b.cl || 0);
+                    if (Math.abs(cloudDiff) > 20) return cloudDiff;
+                    return b.dt - a.dt;
+                });
+
+            if (sorted.length === 0) {
+                console.warn('[NDVI] NDVI 타일이 포함된 이미지 없음');
+                return null;
+            }
+
+            const best = sorted[0];
+            const date = new Date(best.dt * 1000).toLocaleDateString('ko-KR');
+            console.log(`[NDVI] 선택된 이미지: ${date}, 구름 ${best.cl}%, 해상도 ${best.dc}m`);
+
+            // 타일 URL 반환 (ZXY 패턴)
+            return best.tile.ndvi;
+        } catch (err) {
+            console.error('[NDVI] 이미지 검색 오류:', err);
+            return null;
+        }
+    }
+
+    // NDVI 폴리곤 경계를 지도에 그리기
+    _drawNDVIBoundary(coords, areaHa) {
+        const source = this.ndviBoundaryLayer.getSource();
+        source.clear();
+
+        // 좌표 변환 (EPSG:4326 → EPSG:3857)
+        const olCoords = coords.map(c => ol.proj.fromLonLat(c));
+
+        const feature = new ol.Feature({
+            geometry: new ol.geom.Polygon([olCoords])
+        });
+
+        // 면적 라벨 텍스트
+        const areaText = areaHa ? `NDVI 영역 (${areaHa.toFixed(0)}ha)` : 'NDVI 영역';
+
+        feature.setStyle(new ol.style.Style({
+            fill: new ol.style.Fill({
+                color: 'rgba(76, 175, 80, 0.08)'
+            }),
+            stroke: new ol.style.Stroke({
+                color: '#4caf50',
+                width: 2.5,
+                lineDash: [8, 5]
+            }),
+            text: new ol.style.Text({
+                text: areaText,
+                font: 'bold 12px Pretendard, sans-serif',
+                fill: new ol.style.Fill({ color: '#4caf50' }),
+                stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.7)', width: 3 }),
+                overflow: true
+            })
+        }));
+
+        source.addFeature(feature);
+        this.ndviBoundaryLayer.setVisible(true);
+        console.log(`[NDVI] 경계 표시: ${areaText}`);
+    }
+
+    // NDVI 히스토리 로드 및 차트 그리기
+    async _loadNDVIHistory(polygonId) {
+        const end = Math.floor(Date.now() / 1000);
+        const start = Math.floor(new Date('2019-01-01').getTime() / 1000); // 2019년부터
+        const url = `http://api.agromonitoring.com/agro/1.0/ndvi/history?start=${start}&end=${end}&polyid=${polygonId}&appid=${this.agroApiKey}`;
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                console.warn('[NDVI] 히스토리 API 오류:', res.status);
+                return;
+            }
+
+            const history = await res.json();
+            if (!history || history.length === 0) {
+                console.warn('[NDVI] 히스토리 데이터 없음');
+                return;
+            }
+
+            // 날짜순 정렬
+            history.sort((a, b) => a.dt - b.dt);
+
+            console.log(`[NDVI] 히스토리 ${history.length}건 로드 완료`);
+            this._renderNDVIChart(history);
+        } catch (err) {
+            console.error('[NDVI] 히스토리 로드 실패:', err);
+        }
+    }
+
+    // NDVI 히스토리 차트 렌더링
+    _renderNDVIChart(history) {
+        // 차트 컨테이너 생성 (NDVI 패널 안에 배치)
+        let chartContainer = document.getElementById('ndvi-chart-container');
+        if (!chartContainer) {
+            chartContainer = document.createElement('div');
+            chartContainer.id = 'ndvi-chart-container';
+            chartContainer.className = 'ndvi-chart-container';
+            const panel = this._getNDVIPanel();
+            panel.appendChild(chartContainer);
+        }
+
+        chartContainer.innerHTML = `
+            <div class="ndvi-chart-header">
+                <span class="material-icons">show_chart</span>
+                <span>NDVI 시계열 (2019~현재)</span>
+                <button class="ndvi-chart-close" onclick="mapManager._closeNDVIChart()">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <canvas id="ndvi-history-chart"></canvas>
+        `;
+        chartContainer.style.display = 'block';
+
+        const ctx = document.getElementById('ndvi-history-chart').getContext('2d');
+
+        const labels = history.map(h => {
+            const d = new Date(h.dt * 1000);
+            const yr = String(d.getFullYear()).slice(2);
+            return `${yr}.${d.getMonth() + 1}`;
+        });
+        const meanData = history.map(h => h.data?.mean ?? null);
+        const maxData = history.map(h => h.data?.max ?? null);
+        const minData = history.map(h => h.data?.min ?? null);
+        const sources = history.map(h => h.source || '');
+
+        // 기존 차트 파괴
+        if (this._ndviChart) {
+            this._ndviChart.destroy();
+        }
+
+        this._ndviChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'NDVI 평균',
+                        data: meanData,
+                        borderColor: '#4caf50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.15)',
+                        fill: false,
+                        borderWidth: 2,
+                        pointRadius: 2.5,
+                        pointBackgroundColor: '#4caf50',
+                        tension: 0.3
+                    },
+                    {
+                        label: 'NDVI 최대',
+                        data: maxData,
+                        borderColor: 'rgba(76, 175, 80, 0.4)',
+                        borderWidth: 1,
+                        borderDash: [4, 3],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'NDVI 최소',
+                        data: minData,
+                        borderColor: 'rgba(244, 67, 54, 0.4)',
+                        borderWidth: 1,
+                        borderDash: [4, 3],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: '#ccc',
+                            font: { size: 10, family: 'Pretendard' },
+                            boxWidth: 12,
+                            padding: 8
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,30,30,0.95)',
+                        titleFont: { size: 11, family: 'Pretendard' },
+                        bodyFont: { size: 11, family: 'Pretendard' },
+                        callbacks: {
+                            afterBody: (items) => {
+                                const idx = items[0]?.dataIndex;
+                                return idx !== undefined && sources[idx]
+                                    ? `위성: ${sources[idx]}`
+                                    : '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#999', font: { size: 9 }, maxTicksLimit: 12 },
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    },
+                    y: {
+                        min: -0.2,
+                        max: 1.0,
+                        ticks: { color: '#999', font: { size: 10 }, stepSize: 0.2 },
+                        grid: { color: 'rgba(255,255,255,0.08)' }
+                    }
+                }
+            }
+        });
+    }
+
+    // NDVI 차트 닫기
+    _closeNDVIChart() {
+        const el = document.getElementById('ndvi-chart-container');
+        if (el) el.style.display = 'none';
+        if (this._ndviChart) {
+            this._ndviChart.destroy();
+            this._ndviChart = null;
+        }
+    }
+
+    // NDVI 패널 wrapper 가져오기 (없으면 생성)
+    _getNDVIPanel() {
+        let panel = document.getElementById('ndvi-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'ndvi-panel';
+            panel.className = 'ndvi-panel';
+            document.getElementById('map-container').appendChild(panel);
+        }
+        return panel;
+    }
+
+    // NDVI 패널 제거
+    _removeNDVIPanel() {
+        const panel = document.getElementById('ndvi-panel');
+        if (panel) panel.remove();
+    }
+
+    // NDVI 범례 표시/숨기기
+    _showNDVILegend(show) {
+        let legendEl = document.getElementById('ndvi-legend');
+        if (show) {
+            const panel = this._getNDVIPanel();
+            if (!legendEl) {
+                legendEl = document.createElement('div');
+                legendEl.id = 'ndvi-legend';
+                legendEl.className = 'ndvi-legend';
+                // 범례를 패널 맨 앞에 삽입 (차트보다 위에 위치)
+                panel.insertBefore(legendEl, panel.firstChild);
+            }
+            legendEl.innerHTML = `
+                <div class="ndvi-legend-title">
+                    <span class="material-icons">satellite_alt</span> NDVI
+                </div>
+                <div class="ndvi-legend-bar"></div>
+                <div class="ndvi-legend-labels">
+                    <span>-1 (물/나지)</span>
+                    <span>0</span>
+                    <span>+1 (건강한 식생)</span>
+                </div>
+            `;
+            legendEl.style.display = 'block';
+        } else if (legendEl) {
+            legendEl.style.display = 'none';
+        }
+    }
 }
 
 // 전역 인스턴스
 const mapManager = new MapManager();
+

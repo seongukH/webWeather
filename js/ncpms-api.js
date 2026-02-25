@@ -409,15 +409,21 @@ class NcpmsApi {
             const lat = p.center[1];
             const lng = p.center[0];
 
-            // 위도 기반 기온 (남쪽 → 높음, 선택 날짜의 계절 반영)
-            const seasonalTemp = Math.sin((month - 1) * Math.PI / 6) * 15;
-            const latTemp = 28 - (lat - 33) * 1.8;
-            const temperature = (latTemp + seasonalTemp + (seededRandom(seed) - 0.5) * 3).toFixed(1);
+            // 기후 데이터 기반 기온/습도 (KOREAN_CLIMATE_AVG 사용)
+            const monthIdx = month - 1;
+            const nextIdx = month % 12;
+            const dayFrac = (day - 1) / 30;
+            const [baseTemp, baseHumid] = KOREAN_CLIMATE_AVG[monthIdx];
+            const [nextTemp, nextHumid] = KOREAN_CLIMATE_AVG[nextIdx];
+            const interpTemp = baseTemp + (nextTemp - baseTemp) * dayFrac;
+            const interpHumid = baseHumid + (nextHumid - baseHumid) * dayFrac;
 
-            // 습도 (여름 고습도, 해안 높음)
-            const coastFactor = (lng < 127 || lng > 129) ? 5 : 0;
-            const seasonalHumidity = Math.sin((month - 1) * Math.PI / 6) * 20;
-            const humidity = Math.round(55 + seasonalHumidity + coastFactor + seededRandom(seed + 1) * 10);
+            // 위도·해안 보정
+            const latOffset = -(lat - 36) * 1.5;
+            const coastFactor = (lng < 127 || lng > 129) ? 3 : 0;
+            const temperature = (interpTemp + latOffset + (seededRandom(seed) - 0.5) * 2.5).toFixed(1);
+            const humidity = Math.max(30, Math.min(95,
+                Math.round(interpHumid + coastFactor + (seededRandom(seed + 1) - 0.5) * 6)));
 
             // 위험도 계산
             const tempOptimal = 1 - Math.abs(parseFloat(temperature) - 25) / 20;
