@@ -188,6 +188,9 @@ class Sidebar {
         // 히트맵 렌더링 완료까지 대기 후 로딩 해제
         await mapManager.updatePredictions(predictions);
 
+        // 열려있는 팝업 갱신 (기온/습도 등 반영)
+        mapManager.refreshPopup();
+
         // 패널 그래프 업데이트 이벤트 (날짜 포함)
         document.dispatchEvent(new CustomEvent('predictionUpdated', {
             detail: { predictions, date: this.selectedDate }

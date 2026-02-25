@@ -19,10 +19,12 @@ class SettingsModal {
         const settings = this.load();
         document.getElementById('setting-vworld-key').value = settings.vworldKey || '';
         document.getElementById('setting-ncpms-key').value = settings.ncpmsKey || '';
+        document.getElementById('setting-agro-key').value = settings.agroKey || '';
 
-        // 둘 다 password 타입으로
+        // 모두 password 타입으로
         document.getElementById('setting-vworld-key').type = 'password';
         document.getElementById('setting-ncpms-key').type = 'password';
+        document.getElementById('setting-agro-key').type = 'password';
 
         // 상태 표시
         this.updateStatusDisplay();
@@ -44,7 +46,8 @@ class SettingsModal {
     async save() {
         const vworldKey = document.getElementById('setting-vworld-key').value.trim();
         const ncpmsKey = document.getElementById('setting-ncpms-key').value.trim();
-        const settings = { vworldKey, ncpmsKey };
+        const agroKey = document.getElementById('setting-agro-key').value.trim();
+        const settings = { vworldKey, ncpmsKey, agroKey };
 
         // localStorage 캐시 저장
         localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
@@ -140,6 +143,11 @@ class SettingsModal {
             ncpmsApi.setApiKey(settings.ncpmsKey);
             console.log('[Settings] NCPMS API Key 적용됨');
         }
+
+        if (settings.agroKey) {
+            mapManager.agroApiKey = settings.agroKey;
+            console.log('[Settings] Agromonitoring API Key 적용됨');
+        }
     }
 
     // VWorld API Key를 지도 레이어에 적용
@@ -187,6 +195,7 @@ class SettingsModal {
         const settings = this.load();
         const vworldOk = !!settings.vworldKey;
         const ncpmsOk = !!settings.ncpmsKey;
+        const agroOk = !!settings.agroKey;
 
         el.innerHTML = `
             <div class="settings-status-title">연결 상태</div>
@@ -197,6 +206,10 @@ class SettingsModal {
             <div class="settings-status-row">
                 <span class="status-dot" style="background:${ncpmsOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}; box-shadow:0 0 6px ${ncpmsOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}"></span>
                 <span>NCPMS API: ${ncpmsOk ? '<span style="color:var(--risk-safe)">설정됨</span>' : '<span style="color:var(--text-muted)">미설정 (시뮬레이션 모드)</span>'}</span>
+            </div>
+            <div class="settings-status-row">
+                <span class="status-dot" style="background:${agroOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}; box-shadow:0 0 6px ${agroOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}"></span>
+                <span>Agromonitoring: ${agroOk ? '<span style="color:var(--risk-safe)">설정됨</span>' : '<span style="color:var(--text-muted)">미설정 (NDVI 사용 불가)</span>'}</span>
             </div>
             <div class="settings-status-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color);">
                 <span class="status-dot" id="db-status-dot" style="background:var(--text-muted)"></span>
