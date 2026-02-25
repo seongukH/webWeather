@@ -390,7 +390,9 @@ function generatePredictionData(cropId, pestId, dateStr) {
     const cFactor = cropFactor[cropId] || 1.0;
     const baseSeed = hashCode(`${dateStr || 'today'}_${cropId}_${pestId}`);
 
-    const isToday = dateStr === new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const isToday = !dateStr || dateStr === todayStr;
 
     PROVINCES.forEach((p, idx) => {
         const seed = baseSeed + idx * 137;
