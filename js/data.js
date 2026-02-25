@@ -367,15 +367,6 @@ let _liveWeatherCache = null;
 async function preloadWeatherData() {
     if (typeof weatherApi !== 'undefined') {
         _liveWeatherCache = await weatherApi.fetchCurrentWeather();
-        if (_liveWeatherCache) {
-            const keys = Object.keys(_liveWeatherCache);
-            const sample = _liveWeatherCache[keys[0]];
-            console.log(`[Weather] preload 완료: ${keys.length}개 시도, 예시(${keys[0]}): ${sample?.temperature}°C, ${sample?.humidity}%`);
-        } else {
-            console.warn('[Weather] preload 실패: 캐시 null');
-        }
-    } else {
-        console.warn('[Weather] weatherApi 미정의');
     }
 }
 
