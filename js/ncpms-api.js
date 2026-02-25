@@ -22,7 +22,7 @@
 
 class NcpmsApi {
     constructor() {
-        this.apiKey = 'YOUR_NCPMS_API_KEY';
+        this.apiKey = '';
         this.baseUrl = 'http://ncpms.rda.go.kr/npmsAPI/service';
         this.isConnected = false;
         this.lastResponse = null;

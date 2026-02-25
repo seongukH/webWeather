@@ -8,7 +8,8 @@ header('Content-Type: application/json; charset=utf-8');
 
 try {
     $dsn = 'mysql:unix_socket=/run/mysqld/mysqld10.sock;charset=utf8mb4';
-    $pdo = new PDO($dsn, 'root', 'YOUR_DB_PASSWORD', [
+    $dbPass = getenv('DB_PASS') ?: '';
+    $pdo = new PDO($dsn, 'root', $dbPass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     ]);
 
@@ -28,8 +29,8 @@ try {
 
     // 기본 API 키 삽입
     $defaults = [
-        'vworldKey' => 'YOUR_VWORLD_API_KEY',
-        'ncpmsKey'  => 'YOUR_NCPMS_API_KEY',
+        'vworldKey' => '',
+        'ncpmsKey'  => '',
     ];
 
     $stmt = $pdo->prepare('

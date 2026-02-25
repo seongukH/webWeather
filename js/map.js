@@ -3,7 +3,7 @@
  * OpenLayers + VWorld API 연동 + IDW 래스터 히트맵
  */
 
-const VWORLD_API_KEY = 'YOUR_VWORLD_API_KEY';
+const VWORLD_API_KEY = '';
 
 // 지도 레이어 URL 템플릿
 const VWORLD_LAYERS = {

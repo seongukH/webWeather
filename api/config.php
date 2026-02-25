@@ -6,7 +6,7 @@
 
 define('DB_SOCKET', '/run/mysqld/mysqld10.sock');
 define('DB_USER', 'root');
-define('DB_PASS', 'YOUR_DB_PASSWORD');
+define('DB_PASS', getenv('DB_PASS') ?: '');
 define('DB_NAME', 'webweather');
 
 function getDB() {
