@@ -389,6 +389,7 @@ class MapManager {
             probability,
             temperature: provData ? provData.temperature : '-',
             humidity: provData ? provData.humidity : '-',
+            source: provData ? provData.source : 'simulation',
             province: nearest,
             lon: lon.toFixed(5),
             lat: lat.toFixed(5)
@@ -457,7 +458,8 @@ class MapManager {
                 riskValue: pointData.riskValue,
                 probability: pointData.probability,
                 temperature: pointData.temperature,
-                humidity: pointData.humidity
+                humidity: pointData.humidity,
+                source: pointData.source
             });
 
             document.dispatchEvent(new CustomEvent('regionSelected', {
@@ -551,7 +553,8 @@ class MapManager {
                 riskValue: pointData.riskValue,
                 probability: pointData.probability,
                 temperature: pointData.temperature,
-                humidity: pointData.humidity
+                humidity: pointData.humidity,
+                source: pointData.source
             });
         }
     }
