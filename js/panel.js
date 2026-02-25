@@ -66,6 +66,23 @@ class InfoPanel {
         this.updateRegionInfo(null);
     }
 
+    getVWorldApiKey() {
+        if (window.VWORLD_API_KEY && String(window.VWORLD_API_KEY).trim()) {
+            return String(window.VWORLD_API_KEY).trim();
+        }
+
+        try {
+            const raw = localStorage.getItem('pestmap_settings');
+            const settings = raw ? JSON.parse(raw) : {};
+            if (settings.vworldKey && String(settings.vworldKey).trim()) {
+                return String(settings.vworldKey).trim();
+            }
+        } catch {
+            // noop
+        }
+        return '';
+    }
+
     // ─── 주소 검색 ─────────────────────────────
     async handleSearch() {
         const query = document.getElementById('search-input').value.trim();
@@ -75,7 +92,12 @@ class InfoPanel {
         resultsContainer.innerHTML = '<div class="loading-text" style="padding:20px;text-align:center;color:var(--text-muted);">검색 중...</div>';
 
         try {
-            const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(query)}&type=address&format=json&errorformat=json&key=${VWORLD_API_KEY}`;
+            const vworldKey = this.getVWorldApiKey();
+            if (!vworldKey) {
+                throw new Error('VWorld API Key 미설정');
+            }
+
+            const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(query)}&type=address&format=json&errorformat=json&key=${vworldKey}`;
             const response = await fetch(url);
             const data = await response.json();
 

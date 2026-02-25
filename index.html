@@ -337,6 +337,26 @@
                         </div>
                     </div>
 
+                    <!-- 관리자 토큰 -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">
+                            <span class="material-icons">admin_panel_settings</span> 관리자 토큰 (설정 저장용)
+                        </div>
+                        <div class="settings-field">
+                            <label for="setting-admin-token">Admin Token</label>
+                            <div class="settings-input-wrapper">
+                                <input type="password" id="setting-admin-token" placeholder="WEBWEATHER_ADMIN_TOKEN 값 입력...">
+                                <button class="settings-eye-btn"
+                                    onclick="settingsModal.toggleVisibility('setting-admin-token')">
+                                    <span class="material-icons">visibility_off</span>
+                                </button>
+                            </div>
+                            <div class="settings-help">
+                                <span style="font-size:11px;color:var(--text-muted);">브라우저 세션에만 저장됩니다.</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- API 상태 표시 -->
                     <div class="settings-status" id="settings-status"></div>
                 </div>

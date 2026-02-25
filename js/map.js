@@ -3,7 +3,18 @@
  * OpenLayers + VWorld API 연동 + IDW 래스터 히트맵
  */
 
-const VWORLD_API_KEY = '43115ED3-2B2D-33B5-A2F6-0AA60BD281F7';
+const VWORLD_API_KEY = (() => {
+    try {
+        const raw = localStorage.getItem('pestmap_settings');
+        const settings = raw ? JSON.parse(raw) : {};
+        if (settings.vworldKey && String(settings.vworldKey).trim()) {
+            return String(settings.vworldKey).trim();
+        }
+    } catch {
+        // noop
+    }
+    return '';
+})();
 
 // 지도 레이어 URL 템플릿
 const VWORLD_LAYERS = {
@@ -896,7 +907,7 @@ class MapManager {
 
     // Agromonitoring 폴리곤 생성 (한도 초과 시 자동 정리)
     async _createAgroPolygon(coords) {
-        const baseUrl = `http://api.agromonitoring.com/agro/1.0/polygons`;
+        const baseUrl = `https://api.agromonitoring.com/agro/1.0/polygons`;
         const url = `${baseUrl}?appid=${this.agroApiKey}`;
         const body = {
             name: 'NDVI_View',
@@ -944,7 +955,7 @@ class MapManager {
 
     // 기존 폴리곤 재사용 또는 가장 오래된 것 삭제 후 재생성
     async _reuseOrRecyclePolygon(coords, centerLon, centerLat) {
-        const baseUrl = `http://api.agromonitoring.com/agro/1.0/polygons`;
+        const baseUrl = `https://api.agromonitoring.com/agro/1.0/polygons`;
 
         try {
             // 기존 폴리곤 목록 가져오기
@@ -1032,7 +1043,7 @@ class MapManager {
 
     // NDVI 위성 이미지 검색
     async _searchNDVIImage(polygonId, start, end) {
-        const url = `http://api.agromonitoring.com/agro/1.0/image/search?start=${start}&end=${end}&polyid=${polygonId}&appid=${this.agroApiKey}`;
+        const url = `https://api.agromonitoring.com/agro/1.0/image/search?start=${start}&end=${end}&polyid=${polygonId}&appid=${this.agroApiKey}`;
 
         try {
             const res = await fetch(url);
@@ -1116,7 +1127,7 @@ class MapManager {
     async _loadNDVIHistory(polygonId) {
         const end = Math.floor(Date.now() / 1000);
         const start = Math.floor(new Date('2019-01-01').getTime() / 1000); // 2019년부터
-        const url = `http://api.agromonitoring.com/agro/1.0/ndvi/history?start=${start}&end=${end}&polyid=${polygonId}&appid=${this.agroApiKey}`;
+        const url = `https://api.agromonitoring.com/agro/1.0/ndvi/history?start=${start}&end=${end}&polyid=${polygonId}&appid=${this.agroApiKey}`;
 
         try {
             const res = await fetch(url);

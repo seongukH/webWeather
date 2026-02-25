@@ -4,7 +4,7 @@
  * NCPMS(국가농작물병해충관리시스템) 병해충예측지도 API (GIS 기반)
  * API 문서: https://ncpms.rda.go.kr/npms/apiDtlPopup31.np
  * 
- * ▶ 요청 URL: http://ncpms.rda.go.kr/npmsAPI/service
+ * ▶ 요청 URL: /api/proxy_ncpms.php (서버 프록시)
  * ▶ 서비스코드: SVC31 (병해충예측지도)
  * ▶ 요청 파라미터:
  *   - apiKey       : 발급받은 API 인증키
@@ -22,18 +22,14 @@
 
 class NcpmsApi {
     constructor() {
-        this.apiKey = '202660399d8c3791ec92be04d81d852ddf58';
-        this.baseUrl = 'http://ncpms.rda.go.kr/npmsAPI/service';
+        this.apiKey = '';
+        this.baseUrl = 'api/proxy_ncpms.php';
         this.isConnected = false;
         this.lastResponse = null;
         this.lastRawResponse = null;
 
-        // CORS 프록시 목록 (NCPMS 서버는 CORS 미지원이므로 프록시 필요)
-        this.corsProxies = [
-            'https://corsproxy.io/?',
-            'https://api.allorigins.win/raw?url=',
-            'https://api.codetabs.com/v1/proxy?quest='
-        ];
+        // Same-Origin PHP 프록시를 사용하므로 외부 CORS 프록시는 비활성화
+        this.corsProxies = [];
         this.currentProxyIndex = 0;
 
         // ===== 실제 NCPMS 병해충 코드 (diseaseWeedCode) =====
@@ -161,7 +157,7 @@ class NcpmsApi {
         });
 
         const requestUrl = `${this.baseUrl}?${params.toString()}`;
-        console.log(`[NCPMS API] 요청 URL: ${requestUrl}`);
+        console.log('[NCPMS API] 예측 데이터 요청 시작');
         console.log(`[NCPMS API] 작물: ${cropCode}, 병해충: ${ncpmsDiseaseCode} (${diseaseInfo?.name || pestCode}), 날짜: ${displayDate}`);
 
         // 직접 요청 시도 → CORS 프록시 순차 시도

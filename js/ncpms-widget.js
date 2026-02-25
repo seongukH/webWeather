@@ -152,7 +152,7 @@ class NcpmsWidget {
 <html><head>
 <meta charset="UTF-8">
 <style>body{margin:0;padding:0;} #ncpms-widget{width:100%;height:100vh;}</style>
-<script src="http://ncpms.rda.go.kr/npmsAPI/api/openapiFore.jsp"><\/script>
+<script src="https://ncpms.rda.go.kr/npmsAPI/api/openapiFore.jsp"><\/script>
 <script>
 npmsJ(document).ready(function(){
     setNpmsOpenApiKey("${apiKey}");
@@ -191,7 +191,7 @@ npmsJ(document).ready(function(){
 <html><head>
 <meta charset="UTF-8">
 <style>body{margin:0;padding:0;} #ncpms-widget{width:100%;min-height:100vh;}</style>
-<script src="http://ncpms.rda.go.kr/npmsAPI/api/openapiFore.jsp"><\/script>
+<script src="https://ncpms.rda.go.kr/npmsAPI/api/openapiFore.jsp"><\/script>
 <script>
 npmsJ(document).ready(function(){
     setNpmsOpenApiKey("${apiKey}");

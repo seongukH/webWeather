@@ -6,6 +6,7 @@
 class SettingsModal {
     constructor() {
         this.STORAGE_KEY = 'pestmap_settings';
+        this.ADMIN_TOKEN_KEY = 'pestmap_admin_token';
         this.API_URL = 'api/settings.php';
     }
 
@@ -20,6 +21,11 @@ class SettingsModal {
         document.getElementById('setting-vworld-key').value = settings.vworldKey || '';
         document.getElementById('setting-ncpms-key').value = settings.ncpmsKey || '';
         document.getElementById('setting-agro-key').value = settings.agroKey || '';
+        const adminTokenInput = document.getElementById('setting-admin-token');
+        if (adminTokenInput) {
+            adminTokenInput.value = this.loadAdminToken();
+            adminTokenInput.type = 'password';
+        }
 
         // 모두 password 타입으로
         document.getElementById('setting-vworld-key').type = 'password';
@@ -47,26 +53,42 @@ class SettingsModal {
         const vworldKey = document.getElementById('setting-vworld-key').value.trim();
         const ncpmsKey = document.getElementById('setting-ncpms-key').value.trim();
         const agroKey = document.getElementById('setting-agro-key').value.trim();
+        const adminToken = document.getElementById('setting-admin-token')?.value.trim() || '';
         const settings = { vworldKey, ncpmsKey, agroKey };
 
         // localStorage 캐시 저장
         localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
+        this.saveAdminToken(adminToken);
 
         // DB 저장 (백엔드)
+        let dbSaveOk = null;
         try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (adminToken) {
+                headers['X-Admin-Token'] = adminToken;
+            }
+
             const resp = await fetch(this.API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(settings)
             });
-            const result = await resp.json();
+
+            const result = await resp.json().catch(() => ({
+                success: false,
+                error: `HTTP ${resp.status}`
+            }));
+
             if (result.success) {
                 console.log('[Settings] DB 저장 완료:', result.message);
+                dbSaveOk = true;
             } else {
                 console.warn('[Settings] DB 저장 실패:', result.error);
+                dbSaveOk = false;
             }
         } catch (err) {
             console.warn('[Settings] DB 연결 실패, localStorage만 사용:', err.message);
+            dbSaveOk = false;
         }
 
         // VWorld API Key 적용
@@ -84,7 +106,10 @@ class SettingsModal {
         sidebar.updatePrediction();
 
         // 성공 토스트
-        this.showToast('설정이 저장되었습니다.');
+        this.showToast(dbSaveOk === false
+            ? '로컬 저장 완료 (DB 저장 실패)'
+            : '설정이 저장되었습니다.'
+        );
 
         // 모달 닫기
         setTimeout(() => this.close(), 800);
@@ -97,6 +122,26 @@ class SettingsModal {
             return raw ? JSON.parse(raw) : {};
         } catch {
             return {};
+        }
+    }
+
+    loadAdminToken() {
+        try {
+            return sessionStorage.getItem(this.ADMIN_TOKEN_KEY) || '';
+        } catch {
+            return '';
+        }
+    }
+
+    saveAdminToken(token) {
+        try {
+            if (token) {
+                sessionStorage.setItem(this.ADMIN_TOKEN_KEY, token);
+            } else {
+                sessionStorage.removeItem(this.ADMIN_TOKEN_KEY);
+            }
+        } catch {
+            // noop
         }
     }
 
@@ -201,7 +246,7 @@ class SettingsModal {
             <div class="settings-status-title">연결 상태</div>
             <div class="settings-status-row">
                 <span class="status-dot" style="background:${vworldOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}; box-shadow:0 0 6px ${vworldOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}"></span>
-                <span>VWorld API: ${vworldOk ? '<span style="color:var(--risk-safe)">설정됨</span>' : '<span style="color:var(--text-muted)">미설정 (기본 키 사용)</span>'}</span>
+                <span>VWorld API: ${vworldOk ? '<span style="color:var(--risk-safe)">설정됨</span>' : '<span style="color:var(--text-muted)">미설정 (주소검색/배경지도 제한)</span>'}</span>
             </div>
             <div class="settings-status-row">
                 <span class="status-dot" style="background:${ncpmsOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}; box-shadow:0 0 6px ${ncpmsOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}"></span>
@@ -210,6 +255,10 @@ class SettingsModal {
             <div class="settings-status-row">
                 <span class="status-dot" style="background:${agroOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}; box-shadow:0 0 6px ${agroOk ? 'var(--risk-safe)' : 'var(--risk-caution)'}"></span>
                 <span>Agromonitoring: ${agroOk ? '<span style="color:var(--risk-safe)">설정됨</span>' : '<span style="color:var(--text-muted)">미설정 (NDVI 사용 불가)</span>'}</span>
+            </div>
+            <div class="settings-status-row">
+                <span class="status-dot" style="background:${this.loadAdminToken() ? 'var(--risk-safe)' : 'var(--risk-caution)'}; box-shadow:0 0 6px ${this.loadAdminToken() ? 'var(--risk-safe)' : 'var(--risk-caution)'}"></span>
+                <span>관리자 토큰: ${this.loadAdminToken() ? '<span style="color:var(--risk-safe)">세션에 저장됨</span>' : '<span style="color:var(--text-muted)">미설정 (DB 저장 제한)</span>'}</span>
             </div>
             <div class="settings-status-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color);">
                 <span class="status-dot" id="db-status-dot" style="background:var(--text-muted)"></span>
