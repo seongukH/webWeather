@@ -699,8 +699,28 @@ class MapManager {
             page++;
         }
 
-        this.noFlyLoaded = totalLoaded > 0;
-        console.log(`[NoFly] 완료: ${totalLoaded}개 구역, 레이어 visible=${this.noFlyLayer.getVisible()}, features=${source.getFeatures().length}`);
+        if (totalLoaded === 0) {
+            console.log('[NoFly] VWorld API 실패 → 정적 GeoJSON 폴백 로드');
+            await this._loadNoFlyFallback(source, format);
+        }
+
+        this.noFlyLoaded = source.getFeatures().length > 0;
+        console.log(`[NoFly] 완료: ${source.getFeatures().length}개 구역`);
+    }
+
+    async _loadNoFlyFallback(source, format) {
+        try {
+            const resp = await fetch('data/nofly-zones.json');
+            const geojson = await resp.json();
+            const features = format.readFeatures(geojson, {
+                dataProjection: 'EPSG:4326',
+                featureProjection: 'EPSG:3857'
+            });
+            source.addFeatures(features);
+            console.log(`[NoFly] 정적 데이터 로드: ${features.length}개 비행금지구역`);
+        } catch (err) {
+            console.error('[NoFly] 정적 데이터 로드 실패:', err.message);
+        }
     }
 
     // 비행금지구역 스타일
