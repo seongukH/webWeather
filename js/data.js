@@ -360,53 +360,64 @@ function parseDate(dateStr) {
     return new Date(dateStr);
 }
 
-// 샘플 예측 데이터 생성 함수 (5등급, 날짜 기반 계절 반영)
+// Open-Meteo 실시간 기상 데이터 캐시 (weatherApi에서 채움)
+let _liveWeatherCache = null;
+
+// 예측 데이터 생성 전 Open-Meteo 데이터를 미리 로드
+async function preloadWeatherData() {
+    if (typeof weatherApi !== 'undefined') {
+        _liveWeatherCache = await weatherApi.fetchCurrentWeather();
+    }
+}
+
+// 예측 데이터 생성 함수 (Open-Meteo 실측 + 시뮬레이션 위험도)
 function generatePredictionData(cropId, pestId, dateStr) {
     const data = {};
     const date = parseDate(dateStr);
     const month = date.getMonth() + 1;
     const day = date.getDate();
 
-    // 월별 위험도 가중치 (5~8월 고위험)
     const monthWeight = [0.1, 0.15, 0.3, 0.5, 0.7, 0.85, 0.95, 0.9, 0.7, 0.4, 0.2, 0.1];
-    // 월 내 일자 보간 (부드러운 전환)
     const w1 = monthWeight[month - 1];
     const w2 = monthWeight[month % 12];
     const dayFrac = (day - 1) / 30;
     const baseWeight = w1 + (w2 - w1) * dayFrac;
 
-    // 작물별 보정
     const cropFactor = {
         'FC010101': 1.0, 'FC050501': 0.8, 'FT010601': 0.9, 'FT010602': 0.85,
         'FT040603': 0.95, 'FT060614': 0.7, 'VC011205': 1.1, 'VC041202': 0.75, 'VC041209': 0.8
     };
     const cFactor = cropFactor[cropId] || 1.0;
-
-    // 시드: 날짜+작물+병해충 조합 → 같은 조건이면 같은 결과
     const baseSeed = hashCode(`${dateStr || 'today'}_${cropId}_${pestId}`);
+
+    const isToday = dateStr === new Date().toISOString().slice(0, 10);
 
     PROVINCES.forEach((p, idx) => {
         const seed = baseSeed + idx * 137;
-        const lat = p.center[1];
-        const lng = p.center[0];
+        let temperature, humidity;
 
-        // 기후 데이터 기반 기온/습도 (KOREAN_CLIMATE_AVG 사용)
-        const monthIdx = month - 1;
-        const nextIdx = month % 12;
-        const dayFrac = (day - 1) / 30;
-        const [baseTemp, baseHumid] = KOREAN_CLIMATE_AVG[monthIdx];
-        const [nextTemp, nextHumid] = KOREAN_CLIMATE_AVG[nextIdx];
-        const interpTemp = baseTemp + (nextTemp - baseTemp) * dayFrac;
-        const interpHumid = baseHumid + (nextHumid - baseHumid) * dayFrac;
+        // Open-Meteo 실측 데이터 사용 (오늘 날짜인 경우)
+        const live = _liveWeatherCache && _liveWeatherCache[p.code];
+        if (live && isToday) {
+            temperature = live.temperature.toFixed(1);
+            humidity = Math.round(live.humidity);
+        } else {
+            const lat = p.center[1];
+            const lng = p.center[0];
+            const monthIdx = month - 1;
+            const nextIdx = month % 12;
+            const df = (day - 1) / 30;
+            const [baseTemp, baseHumid] = KOREAN_CLIMATE_AVG[monthIdx];
+            const [nextTemp, nextHumid] = KOREAN_CLIMATE_AVG[nextIdx];
+            const interpTemp = baseTemp + (nextTemp - baseTemp) * df;
+            const interpHumid = baseHumid + (nextHumid - baseHumid) * df;
+            const latOffset = -(lat - 36) * 1.5;
+            const coastFactor = (lng < 127 || lng > 129) ? 3 : 0;
+            temperature = (interpTemp + latOffset + (seededRandom(seed) - 0.5) * 2.5).toFixed(1);
+            humidity = Math.max(30, Math.min(95,
+                Math.round(interpHumid + coastFactor + (seededRandom(seed + 1) - 0.5) * 6)));
+        }
 
-        // 위도·해안 보정
-        const latOffset = -(lat - 36) * 1.5;
-        const coastFactor = (lng < 127 || lng > 129) ? 3 : 0;
-        const temperature = (interpTemp + latOffset + (seededRandom(seed) - 0.5) * 2.5).toFixed(1);
-        const humidity = Math.max(30, Math.min(95,
-            Math.round(interpHumid + coastFactor + (seededRandom(seed + 1) - 0.5) * 6)));
-
-        // 위험도 계산
         const tempOptimal = 1 - Math.abs(parseFloat(temperature) - 25) / 20;
         const humidFactor = Math.max(0, (humidity - 50) / 40);
         const rawRisk = baseWeight * cFactor * (
@@ -417,7 +428,8 @@ function generatePredictionData(cropId, pestId, dateStr) {
         const riskLevel = Math.min(4, Math.floor(rawRisk * 5));
         const probability = Math.min(100, Math.round(rawRisk * 100));
 
-        data[p.code] = { riskLevel, probability, temperature, humidity };
+        data[p.code] = { riskLevel, probability, temperature, humidity,
+            source: (live && isToday) ? 'open-meteo' : 'simulation' };
     });
     return data;
 }

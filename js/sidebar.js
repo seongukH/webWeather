@@ -165,6 +165,9 @@ class Sidebar {
         this.showLoading();
         let predictions;
 
+        // Open-Meteo 기상 데이터 미리 로드
+        await preloadWeatherData();
+
         // NCPMS API 사용 시도
         try {
             const apiData = await ncpmsApi.fetchPrediction(

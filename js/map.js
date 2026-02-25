@@ -513,6 +513,7 @@ class MapManager {
                     <span class="popup-info-label">습도</span>
                     <span class="popup-info-value">${data.humidity}%</span>
                 </div>
+                ${data.source === 'open-meteo' ? '<div style="text-align:right;font-size:10px;color:#4fc3f7;margin-top:4px;">📡 Open-Meteo 실측</div>' : ''}
             </div>
             <button class="popup-json-btn" onclick="infoPanel.showJsonData()">
                 <span class="material-icons" style="font-size:14px;vertical-align:middle;">data_object</span>
