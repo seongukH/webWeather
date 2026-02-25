@@ -33,6 +33,10 @@ class App {
             // 5. 지역 폴리곤 로드
             mapManager.loadRegions(PROVINCE_GEOJSON);
 
+            // 5.5. 방제 레이어 초기화
+            sprayLayer.init(mapManager.map);
+            console.log('[App] 방제 레이어 초기화됨');
+
             // 6. 배경지도 전환 버튼
             this.initLayerToggle();
 

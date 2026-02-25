@@ -43,9 +43,25 @@ try {
         $stmt->execute([':key' => $key, ':value' => $value, ':value2' => $value]);
     }
 
+    // 방제 기록 테이블
+    $pdo->exec('
+        CREATE TABLE IF NOT EXISTS spray_records (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            field_boundary JSON NOT NULL COMMENT "논지 바운더리 [[lng,lat],...]",
+            flight_path JSON NOT NULL COMMENT "비행 경로 [[lng,lat],...]",
+            pesticide_type VARCHAR(200) NOT NULL COMMENT "농약 종류",
+            pesticide_amount DECIMAL(10,2) NOT NULL COMMENT "농약 사용량(L)",
+            spray_start DATETIME NOT NULL COMMENT "방제 시작 시간",
+            spray_end DATETIME NOT NULL COMMENT "방제 완료 시간",
+            memo TEXT DEFAULT NULL COMMENT "비고",
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ');
+
     echo json_encode([
         'success' => true,
-        'message' => 'DB 초기화 완료: settings 테이블 생성 + API 키 저장됨'
+        'message' => 'DB 초기화 완료: settings + spray_records 테이블 생성'
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
