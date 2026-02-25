@@ -612,14 +612,19 @@ class MapManager {
     // VWorld API에서 비행금지구역 데이터 로드
     async loadNoFlyZones() {
         const apiKey = window.VWORLD_API_KEY || VWORLD_API_KEY;
+        const format = new ol.format.GeoJSON();
+        const source = this.noFlyLayer.getSource();
+        source.clear();
+
         if (!apiKey) {
-            console.warn('[NoFly] VWorld API Key가 없습니다');
+            console.warn('[NoFly] VWorld API Key 없음 → 정적 데이터 사용');
+            await this._loadNoFlyFallback(source, format);
+            this.noFlyLoaded = source.getFeatures().length > 0;
+            console.log(`[NoFly] 완료: ${source.getFeatures().length}개 구역`);
             return;
         }
 
         console.log('[NoFly] 비행금지구역 데이터 로드 시작...');
-        const source = this.noFlyLayer.getSource();
-        source.clear();
 
         // PHP 프록시 URL (NAS에서 PHP 활성화 시 최우선 사용)
         const phpProxyUrl = 'api/proxy_vworld.php';
@@ -633,7 +638,6 @@ class MapManager {
 
         let page = 1;
         let totalLoaded = 0;
-        const format = new ol.format.GeoJSON();
 
         while (true) {
             const rawParams = `data=LT_C_AISPRHC&key=${apiKey}&size=1000&page=${page}&geomFilter=BOX(124.0,33.0,132.0,43.0)`;
