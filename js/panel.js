@@ -970,7 +970,7 @@ class InfoPanel {
                     <div class="ai-model-selector">
                         <label>AI 모델:</label>
                         <select id="ai-model-select" onchange="infoPanel._saveSelectedModel(this.value); infoPanel._toggleApiKeyField();">
-                            <option value="gemini" ${this._getSelectedModel() === 'gemini' ? 'selected' : ''}>Gemini (gemini-2.0-flash)</option>
+                            <option value="gemini" ${this._getSelectedModel() === 'gemini' ? 'selected' : ''}>Gemini (gemini-2.0-flash-lite)</option>
                             <option value="ollama-llama" ${this._getSelectedModel() === 'ollama-llama' ? 'selected' : ''}>Ollama (llama3.1:70b)</option>
                             <option value="ollama-qwen" ${this._getSelectedModel() === 'ollama-qwen' ? 'selected' : ''}>Ollama (qwen2.5:72b)</option>
                         </select>
@@ -1163,7 +1163,7 @@ class InfoPanel {
             responseEl.innerHTML = '<span style="color:#ef5350;">Gemini API 키가 입력되지 않았습니다.</span><br><span style="color:var(--text-muted);font-size:11px;">위 API Key 입력란에 키를 입력해주세요.</span>';
             return;
         }
-        const GEMINI_MODEL = 'gemini-2.0-flash';
+        const GEMINI_MODEL = 'gemini-2.0-flash-lite';
         const GEMINI_STREAM_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
         const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
