@@ -164,8 +164,9 @@ class NcpmsApi {
         console.log(`[NCPMS API] 요청 URL: ${requestUrl}`);
         console.log(`[NCPMS API] 작물: ${cropCode}, 병해충: ${ncpmsDiseaseCode} (${diseaseInfo?.name || pestCode}), 날짜: ${displayDate}`);
 
-        // 직접 요청 시도 → CORS 프록시 순차 시도
+        // PHP 프록시 → 직접 요청 → CORS 프록시 순차 시도
         const attempts = [
+            () => this._fetchViaPhpProxy(params),
             () => this._fetchDirect(requestUrl),
             ...this.corsProxies.map((proxy, i) => () => this._fetchViaProxy(requestUrl, proxy, i))
         ];
@@ -192,6 +193,15 @@ class NcpmsApi {
         console.log('[NCPMS API] 모든 요청 실패 → 시뮬레이션 데이터 사용');
         this.updateStatus(false);
         return this.generateFallbackData(cropCode, pestCode, date);
+    }
+
+    // ─── PHP 프록시 경유 fetch (로컬 백엔드) ──
+    async _fetchViaPhpProxy(params) {
+        const proxyUrl = `api/proxy_ncpms.php?${params.toString()}`;
+        console.log('[NCPMS API] PHP 프록시 시도...');
+        const response = await fetch(proxyUrl);
+        if (!response.ok) throw new Error(`PHP Proxy HTTP ${response.status}`);
+        return this._parseResponse(response);
     }
 
     // ─── 직접 fetch (Same-Origin 또는 CORS 허용 시) ─
