@@ -419,21 +419,32 @@ class NcpmsApi {
             const lat = p.center[1];
             const lng = p.center[0];
 
-            // 기후 데이터 기반 기온/습도 (KOREAN_CLIMATE_AVG 사용)
-            const monthIdx = month - 1;
-            const nextIdx = month % 12;
-            const dayFrac = (day - 1) / 30;
-            const [baseTemp, baseHumid] = KOREAN_CLIMATE_AVG[monthIdx];
-            const [nextTemp, nextHumid] = KOREAN_CLIMATE_AVG[nextIdx];
-            const interpTemp = baseTemp + (nextTemp - baseTemp) * dayFrac;
-            const interpHumid = baseHumid + (nextHumid - baseHumid) * dayFrac;
+            // Open-Meteo 실측 데이터 우선, 없으면 기후 평균 사용
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+            const isToday = !dateStr || dateStr === todayStr;
+            const live = (typeof _liveWeatherCache !== 'undefined') && _liveWeatherCache && _liveWeatherCache[p.code];
 
-            // 위도·해안 보정
-            const latOffset = -(lat - 36) * 1.5;
-            const coastFactor = (lng < 127 || lng > 129) ? 3 : 0;
-            const temperature = (interpTemp + latOffset + (seededRandom(seed) - 0.5) * 2.5).toFixed(1);
-            const humidity = Math.max(30, Math.min(95,
-                Math.round(interpHumid + coastFactor + (seededRandom(seed + 1) - 0.5) * 6)));
+            let temperature, humidity, source;
+            if (live && isToday) {
+                temperature = live.temperature.toFixed(1);
+                humidity = Math.round(live.humidity);
+                source = 'open-meteo';
+            } else {
+                const monthIdx = month - 1;
+                const nextIdx = month % 12;
+                const df = (day - 1) / 30;
+                const [baseTemp, baseHumid] = KOREAN_CLIMATE_AVG[monthIdx];
+                const [nextTemp, nextHumid] = KOREAN_CLIMATE_AVG[nextIdx];
+                const interpTemp = baseTemp + (nextTemp - baseTemp) * df;
+                const interpHumid = baseHumid + (nextHumid - baseHumid) * df;
+                const latOffset = -(lat - 36) * 1.5;
+                const coastFactor = (lng < 127 || lng > 129) ? 3 : 0;
+                temperature = (interpTemp + latOffset + (seededRandom(seed) - 0.5) * 2.5).toFixed(1);
+                humidity = Math.max(30, Math.min(95,
+                    Math.round(interpHumid + coastFactor + (seededRandom(seed + 1) - 0.5) * 6)));
+                source = 'simulation';
+            }
 
             // 위험도 계산
             const tempOptimal = 1 - Math.abs(parseFloat(temperature) - 25) / 20;
@@ -450,7 +461,8 @@ class NcpmsApi {
                 riskLevel,
                 probability,
                 temperature,
-                humidity
+                humidity,
+                source
             };
         });
 
