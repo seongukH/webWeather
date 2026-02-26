@@ -971,8 +971,9 @@ class InfoPanel {
                         <label>AI 모델:</label>
                         <select id="ai-model-select" onchange="infoPanel._saveSelectedModel(this.value); infoPanel._toggleApiKeyField();">
                             <option value="gemini" ${this._getSelectedModel() === 'gemini' ? 'selected' : ''}>Gemini (gemini-2.0-flash-lite)</option>
-                            <option value="ollama-llama" ${this._getSelectedModel() === 'ollama-llama' ? 'selected' : ''}>Ollama (llama3.1:70b)</option>
-                            <option value="ollama-qwen" ${this._getSelectedModel() === 'ollama-qwen' ? 'selected' : ''}>Ollama (qwen2.5:72b)</option>
+                            <option value="ollama-cloud" ${this._getSelectedModel() === 'ollama-cloud' ? 'selected' : ''}>Ollama Cloud</option>
+                            <option value="ollama-llama" ${this._getSelectedModel() === 'ollama-llama' ? 'selected' : ''}>Ollama Local (llama3.1:70b)</option>
+                            <option value="ollama-qwen" ${this._getSelectedModel() === 'ollama-qwen' ? 'selected' : ''}>Ollama Local (qwen2.5:72b)</option>
                         </select>
                     </div>
                     <div class="ai-apikey-field" id="ai-apikey-field" style="display:${this._getSelectedModel() === 'gemini' ? 'flex' : 'none'}">
@@ -1141,6 +1142,8 @@ class InfoPanel {
         try {
             if (isGemini) {
                 await this._askGemini(message, userPrompt);
+            } else if (selectedModel === 'ollama-cloud') {
+                await this._askOllamaCloud(message, userPrompt);
             } else {
                 const ollamaModel = selectedModel === 'ollama-qwen' ? 'qwen2.5:72b' : 'llama3.1:70b';
                 await this._askOllama(message, userPrompt, ollamaModel);
@@ -1249,7 +1252,45 @@ class InfoPanel {
         }
     }
 
-    // ─── Ollama API ──────────────────────────────
+    // ─── Ollama Cloud API ──────────────────────────
+    async _askOllamaCloud(message, userPrompt) {
+        const responseEl = document.getElementById('ai-response-text');
+        try {
+            const res = await fetch('api/proxy_ollama.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    _endpoint: 'chat',
+                    model: 'llama3.1:70b',
+                    messages: [{ role: 'user', content: message }],
+                    stream: false,
+                }),
+            });
+
+            document.getElementById('ai-typing').style.display = 'none';
+            responseEl.style.display = 'block';
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                responseEl.innerHTML = `<span style="color:#ef5350;">Ollama Cloud 오류 (${res.status})</span><br>
+                    <span style="color:var(--text-muted);font-size:11px;">${errData.error || '서버 연결 실패. OLLAMA_API_TOKEN 환경변수를 확인해주세요.'}</span>`;
+                return;
+            }
+
+            const data = await res.json();
+            const answer = data?.message?.content || data?.response || JSON.stringify(data);
+            responseEl.textContent = answer;
+            this._saveAiHistory(userPrompt, answer);
+            console.log('[AI] Ollama Cloud 응답 완료');
+        } catch (err) {
+            document.getElementById('ai-typing').style.display = 'none';
+            responseEl.style.display = 'block';
+            responseEl.innerHTML = `<span style="color:#ef5350;">Ollama Cloud 연결 실패</span><br>
+                <span style="color:var(--text-muted);font-size:11px;">${err.message}</span>`;
+        }
+    }
+
+    // ─── Ollama Local API ──────────────────────────
     async _askOllama(message, userPrompt, model) {
         const OLLAMA_URLS = [
             'http://localhost:5000',
