@@ -1273,7 +1273,7 @@ class InfoPanel {
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
                 responseEl.innerHTML = `<span style="color:#ef5350;">Ollama Cloud 오류 (${res.status})</span><br>
-                    <span style="color:var(--text-muted);font-size:11px;">${errData.error || '서버 연결 실패. OLLAMA_API_TOKEN 환경변수를 확인해주세요.'}</span>`;
+                    <span style="color:var(--text-muted);font-size:11px;">${errData.error || '서버 연결 실패. OLLAMA_API_KEY 시크릿을 확인해주세요.'}</span>`;
                 return;
             }
 

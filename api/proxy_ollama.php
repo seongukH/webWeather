@@ -20,10 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$apiToken = getenv('OLLAMA_API_TOKEN') ?: '';
+$apiToken = getenv('OLLAMA_API_KEY') ?: getenv('OLLAMA_API_TOKEN') ?: '';
 if (!$apiToken) {
     http_response_code(500);
-    echo json_encode(['error' => 'OLLAMA_API_TOKEN 환경변수 미설정'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'OLLAMA_API_KEY 환경변수 미설정. Secrets에 OLLAMA_API_KEY를 추가해주세요.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
