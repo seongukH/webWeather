@@ -20,13 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$apiToken = getenv('OLLAMA_API_KEY') ?: getenv('OLLAMA_API_TOKEN') ?: '';
-if (!$apiToken) {
-    http_response_code(500);
-    echo json_encode(['error' => 'OLLAMA_API_KEY 환경변수 미설정. Secrets에 OLLAMA_API_KEY를 추가해주세요.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
 $input = file_get_contents('php://input');
 if (!$input) {
     http_response_code(400);
@@ -35,8 +28,17 @@ if (!$input) {
 }
 
 $body = json_decode($input, true);
+
+$apiToken = $body['_apiKey'] ?? getenv('OLLAMA_API_KEY') ?: getenv('OLLAMA_API_TOKEN') ?: '';
+unset($body['_apiKey']);
 $endpoint = $body['_endpoint'] ?? 'chat';
 unset($body['_endpoint']);
+
+if (!$apiToken) {
+    http_response_code(400);
+    echo json_encode(['error' => 'API 키 필요'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 $urlMap = [
     'chat'     => 'https://ollama.com/api/chat',
