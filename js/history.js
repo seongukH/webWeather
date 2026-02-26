@@ -23,12 +23,18 @@ class PestHistory {
     }
 
     async load() {
-        const apiKey = ncpmsApi.apiKey || settingsModal.load().ncpmsKey;
+        let apiKey = ncpmsApi.apiKey;
         if (!apiKey) {
-            this._showStatus('NCPMS API 키를 설정해주세요');
+            try {
+                const stored = JSON.parse(localStorage.getItem('pestmap_settings') || '{}');
+                apiKey = stored.ncpmsKey || '';
+            } catch {}
+        }
+        if (!apiKey) {
+            this._showStatus('NCPMS API 키를 설정 모달에서 입력해주세요');
             return;
         }
-        if (!ncpmsApi.apiKey) ncpmsApi.setApiKey(apiKey);
+        ncpmsApi.setApiKey(apiKey);
 
         this._showStatus('예찰 조사 목록 조회 중...');
 

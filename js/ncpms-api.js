@@ -672,10 +672,14 @@ class NcpmsApi {
         if (cropCode) params.set('kncrCode', cropCode);
 
         const url = `api/proxy_ncpms.php?${params.toString()}`;
+        console.log('[NCPMS] SVC51 요청:', url);
         try {
             const resp = await fetch(url);
-            const data = await resp.json();
+            const text = await resp.text();
+            let data;
+            try { data = JSON.parse(text); } catch { console.warn('[NCPMS] SVC51 JSON 파싱 실패:', text.slice(0, 200)); return []; }
             const list = data?.service?.list || [];
+            console.log(`[NCPMS] SVC51 응답: ${list.length}건`);
             return list.map(item => ({
                 key: item.insectKey,
                 cropCode: item.kncrCode,
