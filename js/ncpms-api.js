@@ -676,9 +676,12 @@ class NcpmsApi {
         try {
             const resp = await fetch(url);
             const text = await resp.text();
-            console.log('[NCPMS] SVC51 응답 길이:', text.length, '앞부분:', text.slice(0, 100));
             let data;
-            try { data = JSON.parse(text); } catch { console.warn('[NCPMS] SVC51 JSON 파싱 실패:', text.slice(0, 200)); return []; }
+            try { data = JSON.parse(text); } catch { console.warn('[NCPMS] SVC51 JSON 파싱 실패'); return []; }
+            if (data?.service?.errorCode) {
+                console.warn(`[NCPMS] SVC51 에러: ${data.service.errorCode} - ${decodeURIComponent(data.service.errorMsg || '')}`);
+                return [];
+            }
             let list = data?.service?.list || [];
             if (!Array.isArray(list)) list = [list];
             console.log(`[NCPMS] SVC51 응답: ${list.length}건`);
