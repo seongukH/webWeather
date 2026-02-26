@@ -976,11 +976,11 @@ class InfoPanel {
                             <option value="ollama-qwen" ${this._getSelectedModel() === 'ollama-qwen' ? 'selected' : ''}>Ollama Local (qwen2.5:72b)</option>
                         </select>
                     </div>
-                    <div class="ai-apikey-field" id="ai-apikey-field" style="display:${this._getSelectedModel() === 'gemini' ? 'flex' : 'none'}">
+                    <div class="ai-apikey-field" id="ai-apikey-field" style="display:${['gemini','ollama-cloud'].includes(this._getSelectedModel()) ? 'flex' : 'none'}">
                         <label>API Key:</label>
                         <div class="ai-apikey-input-wrapper">
                             <input type="password" id="ai-apikey-input" value="${this._loadApiKey()}"
-                                placeholder="Gemini API 키를 입력하세요"
+                                placeholder="${this._getSelectedModel() === 'ollama-cloud' ? 'Ollama API 키를 입력하세요' : 'Gemini API 키를 입력하세요'}"
                                 oninput="infoPanel._saveApiKey(this.value)" spellcheck="false" />
                             <button class="ai-apikey-toggle" onclick="infoPanel._toggleApiKeyVisibility()" title="키 표시/숨기기">
                                 <span class="material-icons" id="ai-apikey-eye">visibility_off</span>
@@ -1066,7 +1066,10 @@ class InfoPanel {
         const field = document.getElementById('ai-apikey-field');
         const select = document.getElementById('ai-model-select');
         if (!field || !select) return;
-        field.style.display = select.value === 'gemini' ? 'flex' : 'none';
+        const needsKey = ['gemini', 'ollama-cloud'].includes(select.value);
+        field.style.display = needsKey ? 'flex' : 'none';
+        const input = document.getElementById('ai-apikey-input');
+        if (input) input.placeholder = select.value === 'ollama-cloud' ? 'Ollama API 키를 입력하세요' : 'Gemini API 키를 입력하세요';
     }
 
     // ─── AI 모델 선택 저장/복원 (localStorage) ──────
@@ -1255,39 +1258,66 @@ class InfoPanel {
     // ─── Ollama Cloud API ──────────────────────────
     async _askOllamaCloud(message, userPrompt) {
         const responseEl = document.getElementById('ai-response-text');
-        try {
-            const res = await fetch('api/proxy_ollama.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    _endpoint: 'chat',
-                    model: 'llama3.1:70b',
-                    messages: [{ role: 'user', content: message }],
-                    stream: false,
-                }),
-            });
-
+        const apiKey = this._loadApiKey();
+        if (!apiKey) {
             document.getElementById('ai-typing').style.display = 'none';
             responseEl.style.display = 'block';
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                responseEl.innerHTML = `<span style="color:#ef5350;">Ollama Cloud 오류 (${res.status})</span><br>
-                    <span style="color:var(--text-muted);font-size:11px;">${errData.error || '서버 연결 실패. OLLAMA_API_KEY 시크릿을 확인해주세요.'}</span>`;
-                return;
-            }
-
-            const data = await res.json();
-            const answer = data?.message?.content || data?.response || JSON.stringify(data);
-            responseEl.textContent = answer;
-            this._saveAiHistory(userPrompt, answer);
-            console.log('[AI] Ollama Cloud 응답 완료');
-        } catch (err) {
-            document.getElementById('ai-typing').style.display = 'none';
-            responseEl.style.display = 'block';
-            responseEl.innerHTML = `<span style="color:#ef5350;">Ollama Cloud 연결 실패</span><br>
-                <span style="color:var(--text-muted);font-size:11px;">${err.message}</span>`;
+            responseEl.innerHTML = '<span style="color:#ef5350;">Ollama API 키가 입력되지 않았습니다.</span><br><span style="color:var(--text-muted);font-size:11px;">위 API Key 입력란에 ollama.com/settings/keys 에서 발급받은 키를 입력해주세요.</span>';
+            return;
         }
+
+        const requestBody = {
+            model: 'llama3.1:8b',
+            messages: [{ role: 'user', content: message }],
+            stream: false,
+        };
+
+        // 1) 직접 호출 시도
+        const attempts = [
+            async () => {
+                console.log('[AI] Ollama Cloud 직접 호출 시도...');
+                const res = await fetch('https://ollama.com/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify(requestBody),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+                return res.json();
+            },
+            async () => {
+                console.log('[AI] Ollama Cloud PHP 프록시 시도...');
+                const res = await fetch('api/proxy_ollama.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...requestBody, _apiKey: apiKey }),
+                });
+                if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+                return res.json();
+            },
+        ];
+
+        for (const attempt of attempts) {
+            try {
+                const data = await attempt();
+                document.getElementById('ai-typing').style.display = 'none';
+                responseEl.style.display = 'block';
+                const answer = data?.message?.content || data?.response || JSON.stringify(data);
+                responseEl.textContent = answer;
+                this._saveAiHistory(userPrompt, answer);
+                console.log('[AI] Ollama Cloud 응답 완료');
+                return;
+            } catch (err) {
+                console.warn('[AI] Ollama Cloud 시도 실패:', err.message);
+            }
+        }
+
+        document.getElementById('ai-typing').style.display = 'none';
+        responseEl.style.display = 'block';
+        responseEl.innerHTML = `<span style="color:#ef5350;">Ollama Cloud 연결 실패</span><br>
+            <span style="color:var(--text-muted);font-size:11px;">API 키를 확인하고 다시 시도해주세요.<br>ollama.com/settings/keys 에서 유효한 키를 발급받으세요.</span>`;
     }
 
     // ─── Ollama Local API ──────────────────────────
