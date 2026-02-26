@@ -23,23 +23,25 @@ class PestHistory {
     }
 
     async load() {
-        if (!ncpmsApi.apiKey) {
+        const apiKey = ncpmsApi.apiKey || settingsModal.load().ncpmsKey;
+        if (!apiKey) {
             this._showStatus('NCPMS API 키를 설정해주세요');
             return;
         }
+        if (!ncpmsApi.apiKey) ncpmsApi.setApiKey(apiKey);
 
         this._showStatus('예찰 조사 목록 조회 중...');
 
-        const cropCode = sidebar.selectedCrop || 'FC010101';
-        this.surveyList = await ncpmsApi.fetchSurveyList(cropCode);
+        this.surveyList = await ncpmsApi.fetchSurveyList();
 
         if (this.surveyList.length === 0) {
             this._showStatus('예찰 조사 데이터가 없습니다');
             return;
         }
 
+        const cropCode = sidebar.selectedCrop || 'FC010101';
         const cropSurveys = this.surveyList.filter(s => s.cropCode === cropCode && s.surveyType === '기본조사');
-        const target = cropSurveys.length > 0 ? cropSurveys[0] : this.surveyList[0];
+        const target = cropSurveys.length > 0 ? cropSurveys[0] : this.surveyList.find(s => s.cropCode === cropCode) || this.surveyList[0];
 
         this._showStatus(`${target.cropName} ${target.round}차 조사 상세 로딩 중...`);
 
