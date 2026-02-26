@@ -390,6 +390,10 @@ class MapManager {
             temperature: provData ? provData.temperature : '-',
             humidity: provData ? provData.humidity : '-',
             source: provData ? provData.source : 'simulation',
+            historyPest: provData?.historyPest,
+            historyArea: provData?.historyArea,
+            historyAreaRate: provData?.historyAreaRate,
+            historyDamageRate: provData?.historyDamageRate,
             province: nearest,
             lon: lon.toFixed(5),
             lat: lat.toFixed(5)
@@ -459,7 +463,11 @@ class MapManager {
                 probability: pointData.probability,
                 temperature: pointData.temperature,
                 humidity: pointData.humidity,
-                source: pointData.source
+                source: pointData.source,
+                historyPest: pointData.historyPest,
+                historyArea: pointData.historyArea,
+                historyAreaRate: pointData.historyAreaRate,
+                historyDamageRate: pointData.historyDamageRate,
             });
 
             document.dispatchEvent(new CustomEvent('regionSelected', {
@@ -516,6 +524,13 @@ class MapManager {
                     <span class="popup-info-value">${data.humidity}%</span>
                 </div>
                 ${data.source === 'open-meteo' ? '<div style="text-align:right;font-size:10px;color:#4fc3f7;margin-top:4px;">📡 Open-Meteo 실측</div>' : ''}
+                ${data.historyPest ? `
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1);font-size:11px;">
+                    <div style="color:#ff9800;font-weight:600;margin-bottom:2px;">📊 발생 이력</div>
+                    <div class="popup-info-row"><span class="popup-info-label">병해충</span><span class="popup-info-value">${data.historyPest}</span></div>
+                    <div class="popup-info-row"><span class="popup-info-label">발생면적</span><span class="popup-info-value">${data.historyArea?.toFixed(1) || 0} ha</span></div>
+                    <div class="popup-info-row"><span class="popup-info-label">발생면적률</span><span class="popup-info-value" style="color:${data.historyAreaRate > 2 ? '#f44336' : data.historyAreaRate > 0.5 ? '#ff9800' : '#4caf50'};">${data.historyAreaRate?.toFixed(3) || 0}%</span></div>
+                </div>` : ''}
             </div>
             <button class="popup-json-btn" onclick="infoPanel.showJsonData()">
                 <span class="material-icons" style="font-size:14px;vertical-align:middle;">data_object</span>

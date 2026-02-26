@@ -6,11 +6,12 @@
  * 사용: /api/proxy_ncpms.php?apiKey=...&serviceCode=SVC31&cropCode=FC010101&...
  */
 
-header('Content-Type: text/xml; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 
 // 허용 파라미터만 전달
-$allowed = ['apiKey','serviceCode','cropCode','diseaseWeedCode','displayDate'];
+$allowed = ['apiKey','serviceCode','cropCode','diseaseWeedCode','displayDate',
+             'sickKey','insectKey','kncrCode','displayCount','listFlag',
+             'sickNameKor','cropName','examinYear'];
 $params = [];
 foreach ($allowed as $k) {
     if (isset($_GET[$k])) {
@@ -37,6 +38,7 @@ curl_setopt_array($ch, [
 
 $body = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: 'application/json; charset=utf-8';
 $error = curl_error($ch);
 curl_close($ch);
 
@@ -48,4 +50,5 @@ if ($error) {
 }
 
 http_response_code($httpCode);
+header('Content-Type: ' . $contentType);
 echo $body;

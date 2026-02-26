@@ -659,6 +659,93 @@ class NcpmsApi {
             raw: this.lastRawResponse
         };
     }
+
+    // ─── 예찰 조사 목록 조회 (SVC51) ─────────────
+    async fetchSurveyList(cropCode) {
+        if (!this.apiKey) return [];
+
+        const params = new URLSearchParams({
+            apiKey: this.apiKey,
+            serviceCode: 'SVC51',
+            displayCount: '100',
+        });
+        if (cropCode) params.set('kncrCode', cropCode);
+
+        const url = `api/proxy_ncpms.php?${params.toString()}`;
+        try {
+            const resp = await fetch(url);
+            const data = await resp.json();
+            const list = data?.service?.list || [];
+            return list.map(item => ({
+                key: item.insectKey,
+                cropCode: item.kncrCode,
+                cropName: decodeURIComponent(item.kncrNm || ''),
+                surveyType: decodeURIComponent(item.examinSpchcknNm || ''),
+                surveyDate: item.inputStdrDatetm,
+                round: item.examinTmrd,
+                year: item.examinYear,
+            }));
+        } catch (err) {
+            console.warn('[NCPMS] SVC51 조회 실패:', err.message);
+            return [];
+        }
+    }
+
+    // ─── 예찰 상세 결과 조회 (SVC52) ─────────────
+    async fetchSurveyDetail(insectKey) {
+        if (!this.apiKey || !insectKey) return null;
+
+        const params = new URLSearchParams({
+            apiKey: this.apiKey,
+            serviceCode: 'SVC52',
+            insectKey: insectKey,
+        });
+
+        const url = `api/proxy_ncpms.php?${params.toString()}`;
+        try {
+            const resp = await fetch(url);
+            const data = await resp.json();
+            const svc = data?.service || {};
+            const items = svc.structList || [];
+
+            const result = {
+                cropCode: svc.kncrCode,
+                cropName: decodeURIComponent(svc.kncrNm || ''),
+                surveyDate: svc.inputStdrDatetm,
+                surveyType: decodeURIComponent(svc.examinSpchcknNm || ''),
+                year: svc.examinYear,
+                round: svc.examinTmrd,
+                regions: {},
+            };
+
+            items.forEach(item => {
+                const sidoCode = String(item.sidoCode);
+                const sidoName = decodeURIComponent(item.sidoNm || '');
+                const pestName = decodeURIComponent(item.dbyhsNm || '');
+                const metric = item.inqireCnClCode;
+                const value = item.inqireValue || 0;
+
+                if (!result.regions[sidoCode]) {
+                    result.regions[sidoCode] = { name: sidoName, pests: {} };
+                }
+                if (!result.regions[sidoCode].pests[pestName]) {
+                    result.regions[sidoCode].pests[pestName] = {};
+                }
+
+                const metricMap = {
+                    'SF0001': 'area', 'SF0002': 'lossRate', 'SF0003': 'damageRate', 'SF0004': 'areaRate',
+                    'SF0005': 'area', 'SF0006': 'lossRate', 'SF0007': 'damageRate', 'SF0008': 'areaRate',
+                };
+                const fieldName = metricMap[metric] || metric;
+                result.regions[sidoCode].pests[pestName][fieldName] = value;
+            });
+
+            return result;
+        } catch (err) {
+            console.warn('[NCPMS] SVC52 조회 실패:', err.message);
+            return null;
+        }
+    }
 }
 
 // 전역 인스턴스
