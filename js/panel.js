@@ -53,6 +53,9 @@ class InfoPanel {
         document.querySelectorAll('.tab-pane').forEach(pane => {
             pane.classList.toggle('active', pane.id === `tab-${tabId}`);
         });
+        if (tabId === 'history') {
+            pestHistory.onTabActive();
+        }
         if (tabId === 'chart') {
             setTimeout(() => {
                 if (this.chart) this.chart.resize();

@@ -131,9 +131,6 @@
                     <button class="nofly-btn" id="spray-toggle" onclick="sprayLayer.toggle()">
                         <span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:2px;">agriculture</span>방제
                     </button>
-                    <button class="nofly-btn" id="history-toggle" onclick="pestHistory.toggle()">
-                        <span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:2px;">history</span>발생이력
-                    </button>
                 </div>
 
                 <!-- 범례 -->
@@ -191,6 +188,9 @@
                     <button class="panel-tab" data-tab="desc">
                         <span class="material-icons">description</span> 설명
                     </button>
+                    <button class="panel-tab" data-tab="history">
+                        <span class="material-icons">history</span> 발생이력
+                    </button>
                 </div>
 
                 <!-- 탭 컨텐츠 -->
@@ -247,6 +247,16 @@
                             </div>
                         </div>
                         <div id="json-data-section"></div>
+                    </div>
+
+                    <!-- 발생이력 탭 -->
+                    <div class="tab-pane" id="tab-history">
+                        <div id="history-content">
+                            <div class="empty-state">
+                                <span class="material-icons">history</span>
+                                <p>NCPMS API 키를 설정하면<br>병해충 발생 이력을 조회합니다.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </aside>
