@@ -71,5 +71,11 @@ if ($error) {
     exit;
 }
 
+if ($httpCode === 401) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Ollama API 인증 실패. API 키를 확인해주세요.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 http_response_code($httpCode);
 echo $response;

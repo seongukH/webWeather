@@ -1041,12 +1041,16 @@ class InfoPanel {
 
     // ─── AI API 키 저장/복원 (localStorage) ─────────
     _saveApiKey(value) {
-        try { localStorage.setItem('pest_ai_apikey', value); } catch (e) {}
+        const model = this._getSelectedModel();
+        const storageKey = model === 'ollama-cloud' ? 'pest_ai_ollama_key' : 'pest_ai_apikey';
+        try { localStorage.setItem(storageKey, value); } catch (e) {}
     }
 
     _loadApiKey() {
+        const model = this._getSelectedModel();
+        const storageKey = model === 'ollama-cloud' ? 'pest_ai_ollama_key' : 'pest_ai_apikey';
         try {
-            return localStorage.getItem('pest_ai_apikey') || '';
+            return localStorage.getItem(storageKey) || '';
         } catch (e) {
             return '';
         }
@@ -1072,7 +1076,10 @@ class InfoPanel {
         const needsKey = ['gemini', 'ollama-cloud'].includes(select.value);
         field.style.display = needsKey ? 'flex' : 'none';
         const input = document.getElementById('ai-apikey-input');
-        if (input) input.placeholder = select.value === 'ollama-cloud' ? 'Ollama API 키를 입력하세요' : 'Gemini API 키를 입력하세요';
+        if (input) {
+            input.placeholder = select.value === 'ollama-cloud' ? 'Ollama API 키를 입력하세요' : 'Gemini API 키를 입력하세요';
+            input.value = this._loadApiKey();
+        }
     }
 
     // ─── AI 모델 선택 저장/복원 (localStorage) ──────
